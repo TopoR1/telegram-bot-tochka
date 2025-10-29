@@ -4,20 +4,25 @@ const PHONE_LENGTH = 11;
 
 export const PHONE_BUTTON_LABEL = 'Отправить номер';
 
-export function normalizePhone(input: string): string | null {
-  const digits = (input.match(/\d+/g) || []).join('');
+export function normalizePhone(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const digits = input.replace(/\D+/g, '');
   if (!digits) return null;
-  let normalized = digits;
-  if (digits.length === 10) {
-    normalized = `8${digits}`;
+
+  if (digits.length === PHONE_LENGTH) {
+    if (digits.startsWith('8')) {
+      return digits;
+    }
+    if (digits.startsWith('7')) {
+      return `8${digits.slice(1)}`;
+    }
   }
-  if (digits.length === PHONE_LENGTH && /^(7|8)/.test(digits)) {
-    normalized = `8${digits.slice(1)}`;
+
+  if (digits.length === PHONE_LENGTH - 1) {
+    return `8${digits}`;
   }
-  if (normalized.length !== PHONE_LENGTH || !normalized.startsWith('8')) {
-    return null;
-  }
-  return normalized;
+
+  return null;
 }
 
 export function maskPhone(phone: string): string {
