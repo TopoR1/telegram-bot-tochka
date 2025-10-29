@@ -17,6 +17,7 @@ async function ensureLogFile(): Promise<void> {
 export type AuditEventName =
   | 'courier.register'
   | 'courier.reset'
+  | 'courier.task_request'
   | 'delivery.sent'
   | 'delivery.failed'
   | 'admin.upload'
