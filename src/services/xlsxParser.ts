@@ -4,7 +4,6 @@ import { v4 as uuid } from 'uuid';
 import { CourierCard } from './types.js';
 import { normalizeFullName } from '../utils/name.js';
 import { normalizePhone } from '../utils/phone.js';
-import { saveAdminTableMetadata } from '../storage/adminTablesStore.js';
 
 interface ColumnMapping {
   phone?: number;
@@ -188,7 +187,13 @@ function buildHeaderMap(headerRow: string[], mapping: ColumnMapping): Record<str
   return headerMap;
 }
 
-export async function parseXlsx(buffer: Buffer, adminId: number): Promise<CourierCard[]> {
+export interface ParsedXlsxResult {
+  cards: CourierCard[];
+  headers: Record<string, string | null>;
+  uploadedAt: string;
+}
+
+export async function parseXlsx(buffer: Buffer, adminId: number): Promise<ParsedXlsxResult> {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
@@ -230,10 +235,9 @@ export async function parseXlsx(buffer: Buffer, adminId: number): Promise<Courie
       return card;
     });
 
-  await saveAdminTableMetadata(adminId, {
-    uploadedAt: now,
-    headers: buildHeaderMap(headerRow ?? [], mapping)
-  });
-
-  return cards;
+  return {
+    cards,
+    headers: buildHeaderMap(headerRow ?? [], mapping),
+    uploadedAt: now
+  };
 }

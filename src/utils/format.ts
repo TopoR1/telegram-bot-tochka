@@ -60,11 +60,3 @@ export function formatCard(card: CourierCard): string {
   return lines.join('\n');
 }
 
-export function formatReportLine(card: CourierCard): string {
-  return [
-    `#${card.orderId ?? '—'}`,
-    card.courierFullName ?? 'неизвестно',
-    card.courierPhone ?? '—',
-    card.status ?? 'pending'
-  ].join(' | ');
-}
