@@ -27,11 +27,12 @@
         "courierPhone": { "type": "string" },
         "courierFullName": { "type": "string" },
         "courierTelegramId": { "type": "number" },
-        "status": { "enum": ["pending", "sent", "failed"] },
+        "status": { "enum": ["pending", "sent", "skipped", "error"] },
         "uploadedAt": { "type": "string" },
         "sentAt": { "type": "string" },
         "messageId": { "type": "number" },
-        "chatId": { "type": "number" }
+        "chatId": { "type": "number" },
+        "report": { "type": "string" }
       },
       "required": ["id", "adminId", "uploadedAt"],
       "additionalProperties": false

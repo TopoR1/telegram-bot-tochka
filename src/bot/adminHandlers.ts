@@ -1,11 +1,7 @@
 import { Markup } from 'telegraf';
-import dayjs from 'dayjs';
 import { BotContext } from './types.js';
 import { attachSession, persistSession } from './session.js';
-import { getOrCreateAdmin, updateAdmin } from '../services/adminService.js';
-import { parseXlsx } from '../services/xlsxParser.js';
-import { attachCouriers } from '../services/courierMatcher.js';
-import { broadcastCards } from '../services/broadcast.js';
+import { getOrCreateAdmin } from '../services/adminService.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
 import { Chat } from 'telegraf/typings/core/types/typegram';
 import { GroupBinding } from '../services/types.js';
@@ -14,6 +10,7 @@ import {
   saveGroupBinding,
   recordAnnouncement
 } from '../services/group-announcements.js';
+import { handleAdminUpload } from './handlers/adminUpload.js';
 
 export async function handleGetAdmin(ctx: BotContext): Promise<void> {
   attachSession(ctx);
@@ -26,16 +23,6 @@ export async function handleGetAdmin(ctx: BotContext): Promise<void> {
   ctx.adminProfile = admin;
   await ctx.reply('Вы зарегистрированы как администратор. Отправьте .xlsx файл с карточками.');
   persistSession(ctx);
-}
-
-async function loadFileBuffer(ctx: BotContext, fileId: string): Promise<Buffer> {
-  const link = await ctx.telegram.getFileLink(fileId);
-  const response = await fetch(link.href);
-  if (!response.ok) {
-    throw new Error('Не удалось загрузить файл из Telegram.');
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 export async function handleDocument(ctx: BotContext): Promise<void> {
@@ -54,16 +41,10 @@ export async function handleDocument(ctx: BotContext): Promise<void> {
       return;
     }
     await ctx.reply('Начинаю обработку файла, это займет несколько секунд...');
-    const buffer = await loadFileBuffer(ctx, document.file_id);
-    const cards = await parseXlsx(buffer, ctx.from.id);
-    const enriched = await attachCouriers(ctx.from.id, cards);
-    const report = await broadcastCards(ctx.telegram, enriched);
-    await updateAdmin(ctx.from.id, (existing) => ({
-      ...existing,
-      lastUploadAt: dayjs().toISOString()
-    }));
-    await ctx.reply(`Готово! ${report.reportText}`);
-    await writeAuditLog({ name: 'admin.upload', userId: ctx.from.id, details: { total: report.total } });
+    await handleAdminUpload(ctx, ctx.from.id, {
+      fileId: document.file_id,
+      fileName: document.file_name ?? undefined
+    });
   } catch (err) {
     await ctx.reply(`Не удалось обработать файл: ${logError(err)}.`);
   }

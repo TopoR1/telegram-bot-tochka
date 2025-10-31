@@ -33,6 +33,8 @@ export interface AdminProfile extends AdminRecord {
   groupBindings: GroupBinding[];
 }
 
+export type DeliveryStatus = 'pending' | 'sent' | 'skipped' | 'error';
+
 export interface CourierCard {
   id: string;
   adminId: number;
@@ -47,25 +49,15 @@ export interface CourierCard {
   courierPhone?: string;
   courierFullName?: string;
   courierTelegramId?: number;
-  status?: 'pending' | 'sent' | 'failed';
+  status?: DeliveryStatus;
   uploadedAt: string;
   sentAt?: string;
   messageId?: number;
   chatId?: number;
-}
-
-export interface DeliveryRecord extends CourierCard {
   report?: string;
 }
 
-export interface DeliveryReport {
-  adminId: number;
-  total: number;
-  success: number;
-  failed: number;
-  missingCouriers: string[];
-  cards: CourierCard[];
-}
+export interface DeliveryRecord extends CourierCard {}
 
 export interface AnnouncementPayload {
   adminId: number;
