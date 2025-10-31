@@ -51,7 +51,7 @@ export async function handleDocument(ctx: BotContext): Promise<void> {
     }
     await ctx.reply('Начинаю обработку файла, это займет несколько секунд...');
     const buffer = await loadFileBuffer(ctx, document.file_id);
-    const cards = parseXlsx(buffer, ctx.from.id);
+    const cards = await parseXlsx(buffer, ctx.from.id);
     const enriched = await attachCouriers(ctx.from.id, cards);
     const report = await broadcastCards(ctx.telegram, enriched);
     await updateAdmin(ctx.from.id, (existing) => ({

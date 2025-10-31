@@ -10,11 +10,12 @@ export interface TaskCardMessage {
 }
 
 export function buildTaskCard(card: CourierCard): TaskCardMessage {
+  const text = formatCard(card);
   return {
-    text: formatCard(card),
+    text,
     options: {
       parse_mode: 'HTML',
-      disable_web_page_preview: true
+      disable_web_page_preview: !card.profileLink
     }
   };
 }
