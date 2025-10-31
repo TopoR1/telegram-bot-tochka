@@ -7,27 +7,9 @@ export interface AdminTableMetadata {
 
 export type AdminTablesCollection = Record<string, AdminTableMetadata>;
 
-const adminTablesSchema = {
-  type: 'object',
-  additionalProperties: {
-    type: 'object',
-    properties: {
-      uploadedAt: { type: 'string' },
-      headers: {
-        type: 'object',
-        additionalProperties: {
-          anyOf: [{ type: 'string' }, { type: 'null' }]
-        }
-      }
-    },
-    required: ['uploadedAt', 'headers'],
-    additionalProperties: false
-  }
-};
-
 export const adminTablesStore = new JsonStore<AdminTablesCollection>({
   name: 'admin_tables',
-  schema: adminTablesSchema,
+  schemaKey: 'adminTables',
   defaultValue: () => ({})
 });
 

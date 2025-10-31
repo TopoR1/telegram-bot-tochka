@@ -1,35 +1,45 @@
 import dayjs from 'dayjs';
 import { adminStore } from '../storage/index.js';
-import { AdminRecord, GroupBinding } from './types.js';
+import { getGroupBindings } from '../storage/groupBindingsStore.js';
+import { AdminProfile, AdminRecord } from './types.js';
 
-export async function getOrCreateAdmin(telegramId: number, profile: Partial<AdminRecord>): Promise<AdminRecord> {
+export async function getOrCreateAdmin(
+  telegramId: number,
+  profile: Partial<AdminRecord>
+): Promise<AdminProfile> {
   const now = dayjs().toISOString();
-  return adminStore.update((collection) => {
+  let record!: AdminRecord;
+  await adminStore.update((collection) => {
     const existing = collection[telegramId.toString()];
     if (existing) {
-      const updated: AdminRecord = {
+      record = {
         ...existing,
         ...profile,
         updatedAt: now
       };
-      collection[telegramId.toString()] = updated;
+      collection[telegramId.toString()] = record;
       return collection;
     }
-    const created: AdminRecord = {
+    record = {
       telegramId,
       username: profile.username,
       firstName: profile.firstName,
       lastName: profile.lastName,
       createdAt: now,
       updatedAt: now,
-      groupBindings: profile.groupBindings ?? []
+      lastUploadAt: profile.lastUploadAt
     };
-    collection[telegramId.toString()] = created;
+    collection[telegramId.toString()] = record;
     return collection;
-  }).then((collection) => collection[telegramId.toString()]);
+  });
+  const bindings = await getGroupBindings(telegramId);
+  return { ...record, groupBindings: bindings };
 }
 
-export async function updateAdmin(telegramId: number, updater: (admin: AdminRecord) => AdminRecord): Promise<AdminRecord> {
+export async function updateAdmin(
+  telegramId: number,
+  updater: (admin: AdminRecord) => AdminRecord
+): Promise<AdminProfile> {
   let updated!: AdminRecord;
   await adminStore.update((collection) => {
     const existing = collection[telegramId.toString()];
@@ -43,10 +53,6 @@ export async function updateAdmin(telegramId: number, updater: (admin: AdminReco
     collection[telegramId.toString()] = updated;
     return collection;
   });
-  return updated;
-}
-
-export async function listGroupBindings(telegramId: number): Promise<GroupBinding[]> {
-  const collection = await adminStore.read();
-  return collection[telegramId.toString()]?.groupBindings ?? [];
+  const bindings = await getGroupBindings(telegramId);
+  return { ...updated, groupBindings: bindings };
 }

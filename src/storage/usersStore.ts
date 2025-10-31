@@ -16,30 +16,9 @@ export interface UserRecord {
 
 export type UsersCollection = Record<string, UserRecord>;
 
-const userSchema = {
-  type: 'object',
-  additionalProperties: {
-    type: 'object',
-    properties: {
-      telegramId: { type: 'number' },
-      username: { type: 'string' },
-      firstName: { type: 'string' },
-      lastName: { type: 'string' },
-      phone: { type: 'string' },
-      normalizedPhone: { type: 'string' },
-      phoneValidated: { type: 'boolean' },
-      createdAt: { type: 'string' },
-      updatedAt: { type: 'string' },
-      lastTaskRequestAt: { type: 'string' }
-    },
-    required: ['telegramId', 'createdAt', 'updatedAt'],
-    additionalProperties: false
-  }
-};
-
 export const usersStore = new JsonStore<UsersCollection>({
   name: 'users',
-  schema: userSchema,
+  schemaKey: 'users',
   defaultValue: () => ({})
 });
 
