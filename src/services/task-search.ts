@@ -1,8 +1,8 @@
-import dayjs from 'dayjs';
 import { courierStore } from '../storage/index.js';
 import { CourierCard, CourierRecord } from './types.js';
 import { getUser } from '../storage/usersStore.js';
 import { normalizePhone } from '../utils/phone.js';
+import { fetchCourierDeliveries } from './dispatch.js';
 
 export interface TaskSearchParams {
   telegramId: number;
@@ -27,9 +27,10 @@ function deduplicateCards(cards: CourierCard[]): CourierCard[] {
 }
 
 export async function searchLatestTasks({ telegramId, limit = 5 }: TaskSearchParams): Promise<TaskSearchResult> {
-  const [couriers, user] = await Promise.all([
+  const [couriers, user, deliveries] = await Promise.all([
     courierStore.read(),
-    getUser(telegramId)
+    getUser(telegramId),
+    fetchCourierDeliveries(telegramId)
   ]);
 
   const normalizedPhone = user?.normalizedPhone;
@@ -52,11 +53,7 @@ export async function searchLatestTasks({ telegramId, limit = 5 }: TaskSearchPar
     return { cards: [], normalizedPhone };
   }
 
-  const cards = Object.values(courier.lastCards ?? {})
-    .flat()
-    .sort((a, b) => dayjs(b.uploadedAt).valueOf() - dayjs(a.uploadedAt).valueOf());
-
-  const unique = deduplicateCards(cards).slice(0, limit);
+  const unique = deduplicateCards(deliveries).slice(0, limit);
   return {
     courier,
     cards: unique,

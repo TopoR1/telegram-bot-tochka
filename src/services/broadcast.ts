@@ -1,8 +1,8 @@
 import dayjs from 'dayjs';
 import { Telegram } from 'telegraf';
 import { formatCard, formatReportLine } from '../utils/format.js';
-import { CourierCard, DeliveryReport } from './types.js';
-import { deliveryStore } from '../storage/index.js';
+import { CourierCard, DeliveryRecord, DeliveryReport } from './types.js';
+import { recordDispatchedCards } from './dispatch.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
 
 export interface BroadcastResult extends DeliveryReport {
@@ -47,10 +47,8 @@ export async function broadcastCards(telegram: Telegram, cards: CourierCard[]): 
       });
     }
   }
-  await deliveryStore.update((collection) => {
-    collection.push(...cards);
-    return collection;
-  });
+  const persisted: DeliveryRecord[] = cards.map((card) => ({ ...card }));
+  await recordDispatchedCards(persisted);
   const total = cards.length;
   const reportLines = cards.map((card) => formatReportLine(card)).join('\n');
   const report: BroadcastResult = {

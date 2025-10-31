@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "groupBinding": {
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "number" },
+        "title": { "type": "string" },
+        "threadId": { "type": "number" }
+      },
+      "required": ["chatId", "title"],
+      "additionalProperties": false
+    },
+    "courierCard": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "adminId": { "type": "number" },
+        "orderId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "earningsLastWeek": { "type": "number" },
+        "profileLink": { "type": "string" },
+        "address": { "type": "string" },
+        "window": { "type": "string" },
+        "paymentType": { "type": "string" },
+        "comment": { "type": "string" },
+        "courierPhone": { "type": "string" },
+        "courierFullName": { "type": "string" },
+        "courierTelegramId": { "type": "number" },
+        "status": { "enum": ["pending", "sent", "failed"] },
+        "uploadedAt": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "messageId": { "type": "number" },
+        "chatId": { "type": "number" }
+      },
+      "required": ["id", "adminId", "uploadedAt"],
+      "additionalProperties": false
+    },
+    "deliveryRecord": {
+      "allOf": [
+        { "$ref": "#/definitions/courierCard" },
+        {
+          "type": "object",
+          "properties": {
+            "report": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "announcement": {
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "number" },
+        "target": { "$ref": "#/definitions/groupBinding" },
+        "message": { "type": "string" },
+        "sentAt": { "type": "string" }
+      },
+      "required": ["adminId", "target", "message", "sentAt"],
+      "additionalProperties": false
+    },
+    "adminTableMetadata": {
+      "type": "object",
+      "properties": {
+        "uploadedAt": { "type": "string" },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "required": ["uploadedAt", "headers"],
+      "additionalProperties": false
+    },
+    "userRecord": {
+      "type": "object",
+      "properties": {
+        "telegramId": { "type": "number" },
+        "username": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "phone": { "type": "string" },
+        "normalizedPhone": { "type": "string" },
+        "phoneValidated": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastTaskRequestAt": { "type": "string" }
+      },
+      "required": ["telegramId", "createdAt", "updatedAt"],
+      "additionalProperties": false
+    },
+    "courierRecord": {
+      "type": "object",
+      "properties": {
+        "telegramId": { "type": "number" },
+        "username": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "awaitingFullName": { "type": "boolean" },
+        "adminIds": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "lastCards": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/courierCard" }
+          }
+        },
+        "announcementTargets": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/groupBinding" }
+        }
+      },
+      "required": ["telegramId", "createdAt", "updatedAt", "adminIds", "lastCards"],
+      "additionalProperties": false
+    },
+    "adminRecord": {
+      "type": "object",
+      "properties": {
+        "telegramId": { "type": "number" },
+        "username": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastUploadAt": { "type": "string" }
+      },
+      "required": ["telegramId", "createdAt", "updatedAt"],
+      "additionalProperties": false
+    }
+  },
+  "stores": {
+    "users": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/userRecord" }
+    },
+    "adminTables": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/adminTableMetadata" }
+    },
+    "couriers": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/courierRecord" }
+    },
+    "admins": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/adminRecord" }
+    },
+    "deliveries": {
+      "type": "object",
+      "properties": {
+        "history": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/deliveryRecord" }
+        },
+        "byCourier": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/deliveryRecord" }
+          }
+        }
+      },
+      "required": ["history", "byCourier"],
+      "additionalProperties": false
+    },
+    "groupBindings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/definitions/groupBinding" }
+      }
+    },
+    "announcements": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/announcement" }
+    }
+  }
+}

@@ -2,14 +2,18 @@ import { Markup } from 'telegraf';
 import dayjs from 'dayjs';
 import { BotContext } from './types.js';
 import { attachSession, persistSession } from './session.js';
-import { getOrCreateAdmin, updateAdmin, listGroupBindings } from '../services/adminService.js';
+import { getOrCreateAdmin, updateAdmin } from '../services/adminService.js';
 import { parseXlsx } from '../services/xlsxParser.js';
 import { attachCouriers } from '../services/courierMatcher.js';
 import { broadcastCards } from '../services/broadcast.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
-import { announcementStore } from '../storage/index.js';
 import { Chat } from 'telegraf/typings/core/types/typegram';
 import { GroupBinding } from '../services/types.js';
+import {
+  listGroupBindings,
+  saveGroupBinding,
+  recordAnnouncement
+} from '../services/group-announcements.js';
 
 export async function handleGetAdmin(ctx: BotContext): Promise<void> {
   attachSession(ctx);
@@ -83,13 +87,10 @@ export async function handleBindGroup(ctx: BotContext): Promise<void> {
         ? ctx.message.message_thread_id ?? undefined
         : undefined
   };
-  await updateAdmin(ctx.from.id, (existing) => ({
-    ...existing,
-    groupBindings: [
-      ...existing.groupBindings.filter((item) => item.chatId !== binding.chatId || item.threadId !== binding.threadId),
-      binding
-    ]
-  }));
+  const updatedBindings = await saveGroupBinding(ctx.from.id, binding);
+  if (ctx.adminProfile) {
+    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: updatedBindings };
+  }
   await ctx.reply(`Чат «${binding.title}» сохранен. Используйте /announce, чтобы отправить сообщение.`);
   persistSession(ctx);
 }
@@ -99,6 +100,9 @@ export async function handleAnnounceCommand(ctx: BotContext): Promise<void> {
   if (!ctx.from || !ctx.message || !('text' in ctx.message)) return;
   const messageText = ctx.message.text.replace(/^\/announce\s*/, '');
   const bindings = await listGroupBindings(ctx.from.id);
+  if (ctx.adminProfile) {
+    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: bindings };
+  }
   if (!bindings.length) {
     await ctx.reply('Сначала привяжите группу командой /bind_group, переслав сообщение из нее.');
     return;
@@ -126,6 +130,9 @@ export async function handleAnnounceSelection(ctx: BotContext): Promise<void> {
   const chatId = Number(chatIdRaw);
   const threadId = Number(threadIdRaw);
   const bindings = await listGroupBindings(ctx.from.id);
+  if (ctx.adminProfile) {
+    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: bindings };
+  }
   const selected = bindings.find((binding) => binding.chatId === chatId && (binding.threadId ?? 0) === threadId);
   if (!selected) {
     await ctx.answerCbQuery('Не удалось найти выбранный чат.');
@@ -167,15 +174,7 @@ async function sendAnnouncement(ctx: BotContext, message: string, target: GroupB
     await ctx.telegram.sendMessage(target.chatId, message, {
       message_thread_id: target.threadId
     });
-    await announcementStore.update((collection) => {
-      collection.push({
-        adminId: ctx.from!.id,
-        target,
-        message,
-        sentAt: dayjs().toISOString()
-      });
-      return collection;
-    });
+    await recordAnnouncement(ctx.from!.id, target, message);
     await writeAuditLog({ name: 'admin.announce', userId: ctx.from!.id, details: { chatId: target.chatId } });
     await ctx.reply(`Анонс опубликован в ${target.title}.`);
   } catch (err) {

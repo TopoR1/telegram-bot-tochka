@@ -1,46 +1,91 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { FileHandle, open } from 'fs/promises';
-import Ajv, { JSONSchemaType, ValidateFunction } from 'ajv';
-import dayjs from 'dayjs';
+import Ajv, { ValidateFunction } from 'ajv';
 
-const ajv = new Ajv({ allErrors: true, removeAdditional: true });
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const BACKUP_DIR = path.resolve(process.cwd(), 'backups');
+const SCHEMA_PATH = path.join(DATA_DIR, 'schema.json');
+const BACKUP_LIMIT = 20;
+
+interface SchemaFile {
+  stores?: Record<string, unknown>;
+}
 
 export interface JsonStoreOptions<T> {
   name: string;
-  schema: object;
+  schemaKey?: string;
   defaultValue: () => T;
 }
 
-async function ensureDir(dir: string): Promise<void> {
+const ajv = new Ajv({ allErrors: true, removeAdditional: true });
+let schemaCache: SchemaFile | null = null;
+
+async function ensureSecureDir(dir: string): Promise<void> {
   await fs.ensureDir(dir, { mode: 0o700 });
+  await fs.chmod(dir, 0o700);
 }
 
-async function syncFd(fd: FileHandle): Promise<void> {
-  await fd.sync();
-  await fd.close();
+async function ensureEnvironment(): Promise<void> {
+  await ensureSecureDir(DATA_DIR);
+  await ensureSecureDir(BACKUP_DIR);
+}
+
+function formatTimestamp(date: Date = new Date()): string {
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+}
+
+async function syncAndClose(handle: FileHandle): Promise<void> {
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+function loadSchema(schemaKey: string): unknown {
+  if (!schemaCache) {
+    if (!fs.existsSync(SCHEMA_PATH)) {
+      throw new Error(`Schema file not found at ${SCHEMA_PATH}`);
+    }
+    schemaCache = fs.readJsonSync(SCHEMA_PATH) as SchemaFile;
+  }
+  const storeSchemas = schemaCache.stores ?? {};
+  const schema = storeSchemas[schemaKey];
+  if (!schema) {
+    throw new Error(`Schema for store "${schemaKey}" not found in ${SCHEMA_PATH}`);
+  }
+  return schema;
 }
 
 export class JsonStore<T> {
   private readonly filePath: string;
 
-  private readonly backupDir: string;
+  private readonly schemaKey: string;
 
   private readonly defaultValue: () => T;
 
   private readonly validator: ValidateFunction<T>;
 
   constructor(options: JsonStoreOptions<T>) {
-    const baseDir = path.resolve(process.cwd(), 'storage');
-    this.filePath = path.join(baseDir, `${options.name}.json`);
-    this.backupDir = path.resolve(process.cwd(), 'backups');
+    this.schemaKey = options.schemaKey ?? options.name;
+    this.filePath = path.join(DATA_DIR, `${options.name}.json`);
     this.defaultValue = options.defaultValue;
-    this.validator = ajv.compile<T>(options.schema as JSONSchemaType<T>);
+    const schema = loadSchema(this.schemaKey);
+    this.validator = ajv.compile<T>(schema as Record<string, unknown>);
   }
 
   async read(): Promise<T> {
-    await ensureDir(path.dirname(this.filePath));
-    if (!(await fs.pathExists(this.filePath))) {
+    await ensureEnvironment();
+    const exists = await fs.pathExists(this.filePath);
+    if (!exists) {
       const initial = this.defaultValue();
       await this.write(initial);
       return initial;
@@ -54,21 +99,33 @@ export class JsonStore<T> {
   }
 
   async write(data: T): Promise<void> {
+    await ensureEnvironment();
     if (!this.validator(data)) {
-      throw new Error(`Validation failed: ${ajv.errorsText(this.validator.errors)}`);
+      throw new Error(`Validation failed for ${this.schemaKey}: ${ajv.errorsText(this.validator.errors)}`);
     }
-    const dir = path.dirname(this.filePath);
-    await ensureDir(dir);
-    const tmpFile = path.join(dir, `${path.basename(this.filePath)}.${process.pid}.${Date.now()}`);
+
     const payload = `${JSON.stringify(data, null, 2)}\n`;
+    const tmpName = `${path.basename(this.filePath)}.${process.pid}.${Date.now()}.tmp`;
+    const tmpFile = path.join(DATA_DIR, tmpName);
+
     await fs.writeFile(tmpFile, payload, { mode: 0o600 });
-    const fileHandle = await open(tmpFile, 'r');
-    await syncFd(fileHandle);
+    const tmpHandle = await open(tmpFile, 'r');
+    await syncAndClose(tmpHandle);
+
     await this.createBackup();
-    await fs.rename(tmpFile, this.filePath);
-    await fs.chmod(this.filePath, 0o600);
-    const dirHandle = await open(dir, 'r');
-    await syncFd(dirHandle);
+
+    let renamed = false;
+    try {
+      await fs.rename(tmpFile, this.filePath);
+      renamed = true;
+      await fs.chmod(this.filePath, 0o600);
+      const dirHandle = await open(DATA_DIR, 'r');
+      await syncAndClose(dirHandle);
+    } finally {
+      if (!renamed) {
+        await fs.remove(tmpFile).catch(() => {});
+      }
+    }
   }
 
   async update(mutator: (value: T) => T): Promise<T> {
@@ -79,26 +136,28 @@ export class JsonStore<T> {
   }
 
   private async createBackup(): Promise<void> {
-    if (!(await fs.pathExists(this.filePath))) {
+    const exists = await fs.pathExists(this.filePath);
+    if (!exists) {
       return;
     }
-    await ensureDir(this.backupDir);
+    await ensureSecureDir(BACKUP_DIR);
+    const timestamp = formatTimestamp();
     const baseName = path.basename(this.filePath);
-    const timestamp = dayjs().format('YYYYMMDD-HHmmss');
-    const backupPath = path.join(this.backupDir, `${baseName}.${timestamp}.json`);
+    const backupName = `${baseName}.${timestamp}.json`;
+    const backupPath = path.join(BACKUP_DIR, backupName);
     await fs.copyFile(this.filePath, backupPath);
     await fs.chmod(backupPath, 0o600);
     await this.rotateBackups(baseName);
   }
 
   private async rotateBackups(baseName: string): Promise<void> {
-    const files = (await fs.readdir(this.backupDir))
-      .filter((file) => file.startsWith(baseName))
+    const entries = await fs.readdir(BACKUP_DIR);
+    const related = entries
+      .filter((name) => name.startsWith(`${baseName}.`))
       .sort((a, b) => (a > b ? -1 : 1));
-    const limit = 20;
-    const toRemove = files.slice(limit);
+    const excess = related.slice(BACKUP_LIMIT);
     await Promise.all(
-      toRemove.map(async (file) => fs.remove(path.join(this.backupDir, file)))
+      excess.map((file) => fs.remove(path.join(BACKUP_DIR, file)).catch(() => {}))
     );
   }
 }

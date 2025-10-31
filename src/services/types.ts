@@ -27,6 +27,9 @@ export interface AdminRecord {
   createdAt: string;
   updatedAt: string;
   lastUploadAt?: string;
+}
+
+export interface AdminProfile extends AdminRecord {
   groupBindings: GroupBinding[];
 }
 
