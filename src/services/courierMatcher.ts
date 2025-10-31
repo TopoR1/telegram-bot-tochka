@@ -1,27 +1,20 @@
 import dayjs from 'dayjs';
 import { courierStore } from '../storage/index.js';
 import { CourierCard, CourierRecord } from './types.js';
-import { comparePhones, normalizePhone, scorePhoneMatch } from '../utils/phone.js';
-import { normalizeFullName } from '../utils/name.js';
-
-function findByPhone(collection: Record<string, CourierRecord>, phone?: string): CourierRecord | undefined {
-  if (!phone) return undefined;
-  const normalized = normalizePhone(phone);
-  if (!normalized) return undefined;
-  return Object.values(collection).find((courier) => comparePhones(courier.phone, normalized));
-}
-
-function findByName(collection: Record<string, CourierRecord>, fullName?: string): CourierRecord | undefined {
-  if (!fullName) return undefined;
-  const normalized = normalizeFullName(fullName);
-  return Object.values(collection).find((courier) => courier.fullName && normalizeFullName(courier.fullName) === normalized);
-}
+import { scorePhoneMatch } from '../utils/phone.js';
+import {
+  findCourierByPhone,
+  findCourierByFullName,
+  getCourierDisplayName
+} from './matching.js';
 
 function getBestCandidate(collection: Record<string, CourierRecord>, card: CourierCard): CourierRecord | undefined {
-  const byPhone = findByPhone(collection, card.courierPhone);
+  const byPhone = findCourierByPhone(collection, card.courierPhone);
   if (byPhone) return byPhone;
-  const byName = findByName(collection, card.courierFullName ?? card.customerName);
-  if (byName) return byName;
+  if (!card.courierPhone) {
+    const byName = findCourierByFullName(collection, card.courierFullName ?? card.customerName);
+    if (byName) return byName;
+  }
   if (card.courierPhone) {
     let best: CourierRecord | undefined;
     let bestScore = 0;
@@ -48,7 +41,7 @@ export async function attachCouriers(adminId: number, cards: CourierCard[]): Pro
     const candidate = getBestCandidate(couriers, card);
     if (candidate) {
       card.courierTelegramId = candidate.telegramId;
-      card.courierFullName = candidate.fullName ?? candidate.firstName ?? candidate.username;
+      card.courierFullName = getCourierDisplayName(candidate);
       card.courierPhone = candidate.phone ?? card.courierPhone;
       card.status = 'pending';
       candidate.lastCards[adminId.toString()] = [

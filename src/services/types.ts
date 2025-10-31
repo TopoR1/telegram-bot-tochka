@@ -35,6 +35,8 @@ export interface CourierCard {
   adminId: number;
   orderId?: string;
   customerName?: string;
+  earningsLastWeek?: number;
+  profileLink?: string;
   address?: string;
   window?: string;
   paymentType?: string;
