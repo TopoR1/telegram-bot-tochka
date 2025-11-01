@@ -3,7 +3,16 @@ import { GroupBinding } from '../services/types.js';
 
 export type GroupBindingsState = Record<string, GroupBinding[]>;
 
-const GROUP_BINDINGS_VERSION = 1;
+const GROUP_BINDINGS_VERSION = 2;
+
+interface LegacyGroupBinding {
+  chatId: number;
+  title: string;
+  threadId?: number;
+  messageThreadId?: number;
+}
+
+type LegacyGroupBindingsState = Record<string, LegacyGroupBinding[]>;
 
 export interface GroupBindingsStoreData {
   version: number;
@@ -15,7 +24,11 @@ function isGroupBinding(value: unknown): value is GroupBinding {
     return false;
   }
   const data = value as Record<string, unknown>;
-  return typeof data.chatId === 'number' && typeof data.title === 'string';
+  return (
+    typeof data.chatId === 'number' &&
+    typeof data.title === 'string' &&
+    (data.messageThreadId === undefined || typeof data.messageThreadId === 'number')
+  );
 }
 
 function isGroupBindingsState(value: unknown): value is GroupBindingsState {
@@ -27,12 +40,62 @@ function isGroupBindingsState(value: unknown): value is GroupBindingsState {
   );
 }
 
+function isLegacyGroupBinding(value: unknown): value is LegacyGroupBinding {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const data = value as Record<string, unknown>;
+  const hasThread = data.threadId === undefined || typeof data.threadId === 'number';
+  const hasMessageThread =
+    data.messageThreadId === undefined || typeof data.messageThreadId === 'number';
+  return typeof data.chatId === 'number' && typeof data.title === 'string' && hasThread && hasMessageThread;
+}
+
+function isLegacyGroupBindingsState(value: unknown): value is LegacyGroupBindingsState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  return Object.values(value as Record<string, unknown>).every(
+    (items) => Array.isArray(items) && items.every(isLegacyGroupBinding)
+  );
+}
+
 function isGroupBindingsStoreData(value: unknown): value is GroupBindingsStoreData {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
   const data = value as Record<string, unknown>;
   return data.version === GROUP_BINDINGS_VERSION && isGroupBindingsState(data.bindings);
+}
+
+function isLegacyGroupBindingsStoreData(value: unknown): value is {
+  version: number;
+  bindings: LegacyGroupBindingsState;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const data = value as Record<string, unknown>;
+  return typeof data.version === 'number' && isLegacyGroupBindingsState(data.bindings);
+}
+
+function convertLegacyBinding(binding: LegacyGroupBinding): GroupBinding {
+  const messageThreadId =
+    binding.messageThreadId ?? (typeof binding.threadId === 'number' ? binding.threadId : undefined);
+  const result: GroupBinding = {
+    chatId: binding.chatId,
+    title: binding.title
+  };
+  if (typeof messageThreadId === 'number') {
+    result.messageThreadId = messageThreadId;
+  }
+  return result;
+}
+
+function convertLegacyState(state: LegacyGroupBindingsState): GroupBindingsState {
+  return Object.fromEntries(
+    Object.entries(state).map(([key, items]) => [key, items.map(convertLegacyBinding)])
+  );
 }
 
 function cloneGroupBinding(binding: GroupBinding): GroupBinding {
@@ -54,8 +117,18 @@ export const groupBindingsStore = new JsonStore<GroupBindingsStoreData>({
       return { data: { version: GROUP_BINDINGS_VERSION, bindings: cloneGroupBindingsState(raw.bindings) }, migrated: false };
     }
 
-    if (isGroupBindingsState(raw)) {
-      return { data: { version: GROUP_BINDINGS_VERSION, bindings: cloneGroupBindingsState(raw) }, migrated: true };
+    if (isLegacyGroupBindingsStoreData(raw)) {
+      return {
+        data: { version: GROUP_BINDINGS_VERSION, bindings: convertLegacyState(raw.bindings) },
+        migrated: raw.version !== GROUP_BINDINGS_VERSION
+      };
+    }
+
+    if (isLegacyGroupBindingsState(raw)) {
+      return {
+        data: { version: GROUP_BINDINGS_VERSION, bindings: convertLegacyState(raw) },
+        migrated: true
+      };
     }
 
     throw new Error('Unsupported group bindings store format');

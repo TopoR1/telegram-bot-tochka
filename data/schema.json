@@ -6,7 +6,7 @@
       "properties": {
         "chatId": { "type": "number" },
         "title": { "type": "string" },
-        "threadId": { "type": "number" }
+        "messageThreadId": { "type": "number" }
       },
       "required": ["chatId", "title"],
       "additionalProperties": false
@@ -166,7 +166,7 @@
     "users": {
       "type": "object",
       "properties": {
-        "version": { "const": 1 },
+        "version": { "const": 2 },
         "users": {
           "type": "array",
           "items": { "$ref": "#/definitions/userRecord" }
@@ -178,7 +178,7 @@
     "adminTables": {
       "type": "object",
       "properties": {
-        "version": { "const": 1 },
+        "version": { "const": 2 },
         "tables": {
           "type": "object",
           "additionalProperties": { "$ref": "#/definitions/adminTableMetadata" }
@@ -198,7 +198,7 @@
     "deliveries": {
       "type": "object",
       "properties": {
-        "version": { "const": 1 },
+        "version": { "const": 2 },
         "items": {
           "type": "object",
           "properties": {
@@ -224,7 +224,7 @@
     "groupBindings": {
       "type": "object",
       "properties": {
-        "version": { "const": 1 },
+        "version": { "const": 2 },
         "bindings": {
           "type": "object",
           "additionalProperties": {

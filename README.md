@@ -72,7 +72,7 @@
 - **`couriers.json`** — объект, где ключи соответствуют `telegramId` курьера. Значения должны содержать `adminIds`, `lastCards` и флаг `awaitingFullName`.
 - **`admins.json`** — объект с ключами-идентификаторами администраторов, включает `groupBindings` (список чатов) и временные метки `createdAt`/`updatedAt`.
 - **`deliveries.json`** — массив карточек. Каждая карточка содержит `id`, `adminId`, сведения о клиенте и статус `sent | failed | pending`.
-- **`announcements.json`** — массив анонсов с `adminId`, объектом `target` (chatId, title, при необходимости threadId), текстом и `sentAt`.
+- **`announcements.json`** — массив анонсов с `adminId`, объектом `target` (chatId, title, при необходимости messageThreadId), текстом и `sentAt`.
 
 После восстановления перезапустите бота (`npm start` или systemd) и убедитесь, что новые записи снова создают резервные копии.
 

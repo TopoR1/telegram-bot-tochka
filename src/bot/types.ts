@@ -10,5 +10,11 @@ export interface BotContext extends Context<Update> {
     awaitingAnnouncement?: boolean;
     selectedGroup?: GroupBinding;
     pendingAnnouncementText?: string;
+    awaitingTopicSelection?: boolean;
+    pendingGroupBinding?: {
+      chatId: number;
+      title: string;
+      forwardedThreadId?: number;
+    };
   };
 }

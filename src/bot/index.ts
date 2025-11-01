@@ -16,8 +16,10 @@ import {
   handleBindGroup,
   handleAnnounceCommand,
   handleAnnounceSelection,
-  handleAnnounceText
+  handleAnnounceText,
+  handleBindGroupSelection
 } from './adminHandlers.js';
+import { handleChatMember, handleMyChatMember } from './handlers/chatMembers.js';
 export function createBot(token: string): Telegraf<BotContext> {
   const bot = new Telegraf<BotContext>(token);
 
@@ -33,7 +35,14 @@ export function createBot(token: string): Telegraf<BotContext> {
 
   bot.on('contact', handleContact);
   bot.on('document', handleDocument);
-  bot.on('callback_query', handleAnnounceSelection);
+  bot.on('my_chat_member', handleMyChatMember);
+  bot.on('chat_member', handleChatMember);
+  bot.on('callback_query', async (ctx, next) => {
+    const handled = (await handleBindGroupSelection(ctx)) || (await handleAnnounceSelection(ctx));
+    if (!handled && next) {
+      await next();
+    }
+  });
   bot.on('text', async (ctx, next) => {
     await handleAnnounceText(ctx);
     await handleText(ctx);

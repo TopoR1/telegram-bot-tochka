@@ -22,7 +22,10 @@ export type AuditEventName =
   | 'delivery.failed'
   | 'admin.upload'
   | 'admin.announce'
-  | 'system.start';
+  | 'admin.bind_group'
+  | 'admin.upload_announcement'
+  | 'system.start'
+  | 'system.chat_update';
 
 export interface AuditEvent {
   name: AuditEventName;

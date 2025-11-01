@@ -25,6 +25,136 @@ export async function handleGetAdmin(ctx: BotContext): Promise<void> {
   persistSession(ctx);
 }
 
+async function clearTopicSelectionKeyboard(ctx: BotContext): Promise<void> {
+  try {
+    await ctx.editMessageReplyMarkup(undefined);
+  } catch (err) {
+    if (process.env.DEBUG) {
+      console.warn('Failed to clear topic keyboard', err);
+    }
+  }
+}
+
+async function finalizeGroupBinding(
+  ctx: BotContext,
+  binding: GroupBinding,
+  mode: 'forwarded' | 'created' | 'skipped'
+): Promise<void> {
+  const updatedBindings = await saveGroupBinding(ctx.from!.id, binding);
+  if (ctx.adminProfile) {
+    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: updatedBindings };
+  }
+
+  const details: Record<string, unknown> = {
+    chatId: binding.chatId,
+    mode
+  };
+  if (binding.messageThreadId !== undefined) {
+    details.messageThreadId = binding.messageThreadId;
+  }
+
+  ctx.sessionState = {
+    ...(ctx.sessionState ?? {}),
+    awaitingTopicSelection: false,
+    pendingGroupBinding: undefined
+  };
+
+  await writeAuditLog({ name: 'admin.bind_group', userId: ctx.from!.id, details });
+
+  const suffix =
+    binding.messageThreadId !== undefined
+      ? ' Бот будет публиковать анонсы в выбранной теме.'
+      : ' Бот будет публиковать анонсы в основном чате.';
+
+  await ctx.reply(`Чат «${binding.title}» сохранен.${suffix} Используйте /announce, чтобы отправить сообщение.`);
+  persistSession(ctx);
+}
+
+export async function handleBindGroupSelection(ctx: BotContext): Promise<boolean> {
+  attachSession(ctx);
+  if (!ctx.from || !ctx.callbackQuery || !('data' in ctx.callbackQuery)) return false;
+  const data = ctx.callbackQuery.data;
+  if (!data?.startsWith('bind:')) {
+    return false;
+  }
+
+  if (!ctx.sessionState?.pendingGroupBinding) {
+    await ctx.answerCbQuery('Данные для привязки не найдены. Повторите /bind_group.');
+    return true;
+  }
+
+  const pending = ctx.sessionState.pendingGroupBinding;
+  const action = data.slice('bind:'.length);
+
+  try {
+    switch (action) {
+      case 'use_forwarded': {
+        if (!pending.forwardedThreadId) {
+          await ctx.answerCbQuery('В пересланном сообщении нет темы. Выберите другой вариант.', { show_alert: true });
+          return true;
+        }
+        await ctx.answerCbQuery('Используем тему из пересланного сообщения.');
+        await clearTopicSelectionKeyboard(ctx);
+        await finalizeGroupBinding(
+          ctx,
+          {
+            chatId: pending.chatId,
+            title: pending.title,
+            messageThreadId: pending.forwardedThreadId
+          },
+          'forwarded'
+        );
+        return true;
+      }
+      case 'create_topic': {
+        try {
+          const created = await ctx.telegram.callApi('createForumTopic', {
+            chat_id: pending.chatId,
+            name: 'Анонсы бота'
+          });
+          const messageThreadId = (created as { message_thread_id?: number }).message_thread_id;
+          if (typeof messageThreadId !== 'number') {
+            throw new Error('Telegram не вернул идентификатор темы');
+          }
+          await clearTopicSelectionKeyboard(ctx);
+          await finalizeGroupBinding(
+            ctx,
+            {
+              chatId: pending.chatId,
+              title: pending.title,
+              messageThreadId
+            },
+            'created'
+          );
+          await ctx.answerCbQuery('Создана новая тема для анонсов.');
+        } catch (err) {
+          await ctx.answerCbQuery('Не удалось создать тему. Проверьте права администратора.', { show_alert: true });
+          await ctx.reply(`Создать тему не получилось: ${logError(err)}.`);
+        }
+        return true;
+      }
+      case 'skip_topic': {
+        await ctx.answerCbQuery('Будем публиковать в общем чате.');
+        await clearTopicSelectionKeyboard(ctx);
+        await finalizeGroupBinding(
+          ctx,
+          {
+            chatId: pending.chatId,
+            title: pending.title
+          },
+          'skipped'
+        );
+        return true;
+      }
+      default:
+        await ctx.answerCbQuery('Неизвестная команда.');
+        return true;
+    }
+  } finally {
+    persistSession(ctx);
+  }
+}
+
 export async function handleDocument(ctx: BotContext): Promise<void> {
   attachSession(ctx);
   if (!ctx.from || !ctx.message || !('document' in ctx.message)) return;
@@ -60,19 +190,36 @@ export async function handleBindGroup(ctx: BotContext): Promise<void> {
   const chat = ctx.message.forward_from_chat as Chat;
   const chatTitle = 'title' in chat && chat.title ? chat.title : undefined;
   const chatUsername = 'username' in chat && chat.username ? chat.username : undefined;
-  const binding: GroupBinding = {
-    chatId: chat.id,
-    title: chatTitle ?? chatUsername ?? `Чат ${chat.id}`,
-    threadId:
-      'is_topic_message' in ctx.message && ctx.message.is_topic_message
-        ? ctx.message.message_thread_id ?? undefined
-        : undefined
+  const forwardedThreadId =
+    'is_topic_message' in ctx.message && ctx.message.is_topic_message
+      ? ctx.message.message_thread_id ?? undefined
+      : undefined;
+  const title = chatTitle ?? chatUsername ?? `Чат ${chat.id}`;
+
+  ctx.sessionState = {
+    ...(ctx.sessionState ?? {}),
+    awaitingTopicSelection: true,
+    pendingGroupBinding: {
+      chatId: chat.id,
+      title,
+      forwardedThreadId
+    }
   };
-  const updatedBindings = await saveGroupBinding(ctx.from.id, binding);
-  if (ctx.adminProfile) {
-    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: updatedBindings };
-  }
-  await ctx.reply(`Чат «${binding.title}» сохранен. Используйте /announce, чтобы отправить сообщение.`);
+
+  const topicOptions = [
+    Markup.button.callback('Использовать тему из пересланного сообщения', 'bind:use_forwarded'),
+    Markup.button.callback('Создать новую тему', 'bind:create_topic'),
+    Markup.button.callback('Пропустить', 'bind:skip_topic')
+  ];
+  await ctx.reply(
+    [
+      `Чат «${title}» найден. Теперь выберите тему для анонсов:`,
+      '• Используйте тему из пересланного сообщения, если бот должен писать в существующий тред.',
+      '• Создайте новую тему — бот сделает отдельный тред «Анонсы бота».',
+      '• Пропустите, если в чате нет тем или хотите писать в общий чат.'
+    ].join('\n'),
+    Markup.inlineKeyboard(topicOptions, { columns: 1 })
+  );
   persistSession(ctx);
 }
 
@@ -94,30 +241,35 @@ export async function handleAnnounceCommand(ctx: BotContext): Promise<void> {
     pendingAnnouncementText: messageText || undefined
   };
   const keyboard = Markup.inlineKeyboard(
-    bindings.map((binding) => Markup.button.callback(binding.title, `announce:${binding.chatId}:${binding.threadId ?? 0}`))
+    bindings.map((binding) =>
+      Markup.button.callback(
+        binding.title,
+        `announce:${binding.chatId}:${binding.messageThreadId ?? 0}`
+      )
+    )
   );
   await ctx.reply(messageText ? 'Выберите чат для публикации этого анонса.' : 'Выберите чат и отправьте текст анонса.', keyboard);
   persistSession(ctx);
 }
 
-export async function handleAnnounceSelection(ctx: BotContext): Promise<void> {
+export async function handleAnnounceSelection(ctx: BotContext): Promise<boolean> {
   attachSession(ctx);
-  if (!ctx.from || !ctx.callbackQuery) return;
-  const query = ctx.callbackQuery;
-  if (!('data' in query)) return;
-  const data = query.data;
-  if (!data?.startsWith('announce:')) return;
-  const [, chatIdRaw, threadIdRaw] = data.split(':');
+  if (!ctx.from || !ctx.callbackQuery || !('data' in ctx.callbackQuery)) return false;
+  const data = ctx.callbackQuery.data;
+  if (!data?.startsWith('announce:')) return false;
+  const [, chatIdRaw, messageThreadIdRaw] = data.split(':');
   const chatId = Number(chatIdRaw);
-  const threadId = Number(threadIdRaw);
+  const messageThreadId = Number(messageThreadIdRaw);
   const bindings = await listGroupBindings(ctx.from.id);
   if (ctx.adminProfile) {
     ctx.adminProfile = { ...ctx.adminProfile, groupBindings: bindings };
   }
-  const selected = bindings.find((binding) => binding.chatId === chatId && (binding.threadId ?? 0) === threadId);
+  const selected = bindings.find(
+    (binding) => binding.chatId === chatId && (binding.messageThreadId ?? 0) === messageThreadId
+  );
   if (!selected) {
     await ctx.answerCbQuery('Не удалось найти выбранный чат.');
-    return;
+    return true;
   }
   ctx.sessionState = {
     ...(ctx.sessionState ?? {}),
@@ -132,6 +284,7 @@ export async function handleAnnounceSelection(ctx: BotContext): Promise<void> {
     await ctx.reply(`Отправьте текст анонса для ${selected.title}.`);
   }
   persistSession(ctx);
+  return true;
 }
 
 export async function handleAnnounceText(ctx: BotContext): Promise<void> {
@@ -153,10 +306,14 @@ export async function handleAnnounceText(ctx: BotContext): Promise<void> {
 async function sendAnnouncement(ctx: BotContext, message: string, target: GroupBinding): Promise<void> {
   try {
     await ctx.telegram.sendMessage(target.chatId, message, {
-      message_thread_id: target.threadId
+      message_thread_id: target.messageThreadId
     });
     await recordAnnouncement(ctx.from!.id, target, message);
-    await writeAuditLog({ name: 'admin.announce', userId: ctx.from!.id, details: { chatId: target.chatId } });
+    const details: Record<string, unknown> = { chatId: target.chatId };
+    if (target.messageThreadId !== undefined) {
+      details.messageThreadId = target.messageThreadId;
+    }
+    await writeAuditLog({ name: 'admin.announce', userId: ctx.from!.id, details });
     await ctx.reply(`Анонс опубликован в ${target.title}.`);
   } catch (err) {
     await ctx.reply(`Не удалось опубликовать анонс: ${logError(err)}.`);
