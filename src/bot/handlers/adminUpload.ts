@@ -36,7 +36,8 @@ export async function handleAdminUpload(
   const parsed: ParsedXlsxResult = await parseXlsx(buffer, adminId);
   await saveAdminTableMetadata(adminId, {
     uploadedAt: parsed.uploadedAt,
-    headers: parsed.headers
+    headers: parsed.headers,
+    rows: parsed.rows
   });
 
   const cards = await attachCouriers(adminId, parsed.cards);

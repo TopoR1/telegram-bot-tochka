@@ -1,8 +1,23 @@
 import { JsonStore } from './jsonStore.js';
 
+export interface AdminTableRow {
+  id: string;
+  orderId?: string;
+  customerName?: string;
+  normalizedFullName?: string;
+  phone?: string;
+  earningsLastWeek?: number;
+  profileLink?: string;
+  address?: string;
+  window?: string;
+  paymentType?: string;
+  comment?: string;
+}
+
 export interface AdminTableMetadata {
   uploadedAt: string;
   headers: Record<string, string | null>;
+  rows: AdminTableRow[];
 }
 
 export type AdminTablesCollection = Record<string, AdminTableMetadata>;
@@ -28,4 +43,8 @@ export async function getAdminTableMetadata(
 ): Promise<AdminTableMetadata | undefined> {
   const collection = await adminTablesStore.read();
   return collection[adminId.toString()];
+}
+
+export async function listAdminTables(): Promise<AdminTablesCollection> {
+  return adminTablesStore.read();
 }
