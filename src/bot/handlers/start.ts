@@ -41,19 +41,22 @@ async function deliverLatestTasks(ctx: BotContext, options: DeliverOptions = {})
 
   if (!result.courier) {
     if (notifyWhenEmpty) {
-      await ctx.reply('Вы ещё не зарегистрированы. Используйте /start и отправьте номер телефона.');
+      await ctx.reply('Похоже, вы ещё не зарегистрированы. Нажмите /start и отправьте номер телефона, я помогу. 🙂');
     }
     return;
   }
 
   if (!result.cards.length) {
     if (notifyWhenEmpty) {
-      await ctx.reply('Пока не удалось найти для вас актуальные задания. Попробуйте позже.');
+      await ctx.reply('Пока актуальных заданий нет. Загляните чуть позже, я продолжу искать. ⏳');
     }
     return;
   }
 
-  const intro = result.cards.length > 1 ? `Нашли ${result.cards.length} последних заданий:` : 'Нашли актуальное задание:';
+  const intro =
+    result.cards.length > 1
+      ? `Вот что нашёл для вас: ${result.cards.length} последних заданий. 📋`
+      : 'Вот актуальное задание для вас. 📋';
   await ctx.reply(intro);
   for (const card of result.cards) {
     const { text, options } = buildTaskCard(card);
@@ -66,7 +69,7 @@ async function handlePhoneSubmission(ctx: BotContext, rawPhone: string, options:
   if (!ctx.from) return;
   const normalizedPhone = normalizePhone(rawPhone);
   if (!normalizedPhone) {
-    await ctx.reply('Не удалось распознать номер. Убедитесь, что он в формате 8XXXXXXXXXX.');
+    await ctx.reply('Упс, не распознал номер. Проверьте формат 8XXXXXXXXXX и попробуйте снова. 📞');
     return;
   }
 
@@ -98,13 +101,15 @@ async function handlePhoneSubmission(ctx: BotContext, rawPhone: string, options:
   });
 
   if (shouldRequestFullName) {
-    await ctx.reply('Спасибо! Теперь введите ваше ФИО одной строкой.');
+    await ctx.reply('Спасибо! ✍️ Напишите, пожалуйста, ваше ФИО одной строкой.');
   } else {
-    await ctx.reply('Номер обновлён. Проверяем для вас задания...');
+    await ctx.reply('Номер сохранён. 🔍 Ищу ваше последнее задание…');
   }
 
   persistSession(ctx);
-  await deliverLatestTasks(ctx, { notifyWhenEmpty: true, limit: 5, reason: 'auto' });
+  if (!shouldRequestFullName) {
+    await deliverLatestTasks(ctx, { notifyWhenEmpty: true, limit: 5, reason: 'auto' });
+  }
 }
 
 export async function handleStart(ctx: BotContext): Promise<void> {
@@ -122,7 +127,7 @@ export async function handleStart(ctx: BotContext): Promise<void> {
   await upsertUser({ telegramId: ctx.from.id, ...profile });
 
   await ctx.reply(
-    'Добро пожаловать! Отправьте свой номер телефона кнопкой ниже или введите его вручную в формате 8XXXXXXXXXX.',
+    'Привет! 👋 Поделитесь номером через кнопку ниже или отправьте его в формате 8XXXXXXXXXX, и я подключу вас к заданиям.',
     createCourierStartKeyboard()
   );
   persistSession(ctx);
@@ -146,7 +151,7 @@ export async function handleReset(ctx: BotContext): Promise<void> {
     normalizedPhone: null,
     phoneValidated: false
   });
-  await ctx.reply('Данные сброшены. Отправьте новый номер телефона и ФИО.');
+  await ctx.reply('Готово! 🔁 Данные очищены. Отправьте новый номер телефона и ФИО, когда будете готовы.');
   await writeAuditLog({ name: 'courier.reset', userId: ctx.from.id });
   persistSession(ctx);
 }
@@ -156,7 +161,7 @@ export async function handleContact(ctx: BotContext): Promise<void> {
   if (!ctx.from || !ctx.message || !('contact' in ctx.message)) return;
   const contact = ctx.message.contact;
   if (contact.user_id && contact.user_id !== ctx.from.id) {
-    await ctx.reply('Пожалуйста, отправьте контакт с вашего номера телефона.');
+    await ctx.reply('Похоже, контакт с другого номера. Отправьте, пожалуйста, контакт со своего телефона. 📱');
     return;
   }
   await handlePhoneSubmission(ctx, contact.phone_number, { validated: true });
@@ -177,8 +182,9 @@ export async function handleText(ctx: BotContext): Promise<void> {
     }));
     ctx.courierProfile = courier;
     ctx.sessionState = { awaitingFullName: false };
-    await ctx.reply(`Отлично, ${fullName}! Ожидайте карточки.`);
+    await ctx.reply(`Спасибо, ${fullName}! Номер сохранён. 🔍 Ищу ваше последнее задание…`);
     persistSession(ctx);
+    await deliverLatestTasks(ctx, { notifyWhenEmpty: true, limit: 5, reason: 'auto' });
     return;
   }
 
