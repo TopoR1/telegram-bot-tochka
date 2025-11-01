@@ -60,6 +60,24 @@
       "required": ["adminId", "target", "message", "sentAt"],
       "additionalProperties": false
     },
+    "adminTableRow": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "normalizedFullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "earningsLastWeek": { "type": "number" },
+        "profileLink": { "type": "string" },
+        "address": { "type": "string" },
+        "window": { "type": "string" },
+        "paymentType": { "type": "string" },
+        "comment": { "type": "string" }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
     "adminTableMetadata": {
       "type": "object",
       "properties": {
@@ -72,9 +90,13 @@
               { "type": "null" }
             ]
           }
+        },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/adminTableRow" }
         }
       },
-      "required": ["uploadedAt", "headers"],
+      "required": ["uploadedAt", "headers", "rows"],
       "additionalProperties": false
     },
     "userRecord": {

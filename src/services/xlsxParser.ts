@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import { CourierCard } from './types.js';
 import { normalizeFullName } from '../utils/name.js';
 import { normalizePhone } from '../utils/phone.js';
+import { AdminTableRow } from '../storage/adminTablesStore.js';
 
 interface ColumnMapping {
   phone?: number;
@@ -191,6 +192,7 @@ export interface ParsedXlsxResult {
   cards: CourierCard[];
   headers: Record<string, string | null>;
   uploadedAt: string;
+  rows: AdminTableRow[];
 }
 
 export async function parseXlsx(buffer: Buffer, adminId: number): Promise<ParsedXlsxResult> {
@@ -207,37 +209,77 @@ export async function parseXlsx(buffer: Buffer, adminId: number): Promise<Parsed
   const [headerRow, ...dataRows] = rows as string[][];
   const mapping = detectColumns(headerRow ?? [], dataRows ?? []);
   const now = dayjs().toISOString();
-  const cards = dataRows
-    .filter((row) => row.some((cell) => cell !== undefined && cell !== null && String(cell).trim() !== ''))
-    .map((row) => {
-      const phoneRaw = mapping.phone !== undefined ? row[mapping.phone] : undefined;
-      const earningsRaw = mapping.earnings !== undefined ? row[mapping.earnings] : undefined;
-      const linkRaw = mapping.link !== undefined ? row[mapping.link] : undefined;
-      const card: CourierCard = {
-        id: uuid(),
-        adminId,
-        orderId: mapping.order !== undefined ? String(row[mapping.order] ?? '').trim() || undefined : undefined,
-        customerName:
-          mapping.fullName !== undefined && row[mapping.fullName] !== undefined
-            ? normalizeFullName(String(row[mapping.fullName] ?? ''))
-            : undefined,
-        earningsLastWeek: normalizeMoney(earningsRaw),
-        profileLink: normalizeLink(linkRaw),
-        address: mapping.address !== undefined ? String(row[mapping.address] ?? '').trim() || undefined : undefined,
-        window: mapping.window !== undefined ? String(row[mapping.window] ?? '').trim() || undefined : undefined,
-        paymentType:
-          mapping.payment !== undefined ? String(row[mapping.payment] ?? '').trim() || undefined : undefined,
-        comment: mapping.comment !== undefined ? String(row[mapping.comment] ?? '').trim() || undefined : undefined,
-        courierPhone: phoneRaw ? normalizePhone(String(phoneRaw)) ?? undefined : undefined,
-        uploadedAt: now,
-        status: 'pending'
-      };
-      return card;
-    });
+  const cards: CourierCard[] = [];
+  const rowsData: AdminTableRow[] = [];
+
+  const isRowEmpty = (row: string[]): boolean =>
+    !row.some((cell) => cell !== undefined && cell !== null && String(cell).trim() !== '');
+
+  const readCell = (row: string[], index?: number): string | undefined => {
+    if (index === undefined) return undefined;
+    const value = row[index];
+    if (value === undefined || value === null) return undefined;
+    const trimmed = String(value).trim();
+    return trimmed || undefined;
+  };
+
+  for (const row of dataRows) {
+    if (isRowEmpty(row)) {
+      continue;
+    }
+
+    const rawPhone = readCell(row, mapping.phone);
+    const normalizedPhone = rawPhone ? normalizePhone(rawPhone) ?? undefined : undefined;
+    const earningsRaw = readCell(row, mapping.earnings);
+    const linkRaw = readCell(row, mapping.link);
+    const orderId = readCell(row, mapping.order);
+    const address = readCell(row, mapping.address);
+    const windowValue = readCell(row, mapping.window);
+    const paymentType = readCell(row, mapping.payment);
+    const comment = readCell(row, mapping.comment);
+    const fullNameRaw = readCell(row, mapping.fullName);
+    const customerName = fullNameRaw ? normalizeFullName(fullNameRaw) : undefined;
+    const normalizedFullName = customerName ? customerName.replace(/\s+/g, ' ').toLowerCase() : undefined;
+
+    const card: CourierCard = {
+      id: uuid(),
+      adminId,
+      orderId,
+      customerName,
+      earningsLastWeek: normalizeMoney(earningsRaw),
+      profileLink: normalizeLink(linkRaw),
+      address,
+      window: windowValue,
+      paymentType,
+      comment,
+      courierPhone: normalizedPhone,
+      courierFullName: customerName,
+      uploadedAt: now,
+      status: 'pending'
+    };
+
+    const normalizedRow: AdminTableRow = {
+      id: card.id,
+      orderId: card.orderId,
+      customerName: card.customerName,
+      normalizedFullName,
+      phone: card.courierPhone,
+      earningsLastWeek: card.earningsLastWeek,
+      profileLink: card.profileLink,
+      address: card.address,
+      window: card.window,
+      paymentType: card.paymentType,
+      comment: card.comment
+    };
+
+    cards.push(card);
+    rowsData.push(normalizedRow);
+  }
 
   return {
     cards,
     headers: buildHeaderMap(headerRow ?? [], mapping),
-    uploadedAt: now
+    uploadedAt: now,
+    rows: rowsData
   };
 }
