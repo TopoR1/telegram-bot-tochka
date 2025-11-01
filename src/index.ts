@@ -1,13 +1,9 @@
 import 'dotenv/config';
 import process from 'process';
 import fs from 'fs-extra';
-import path from 'path';
 import { createBot } from './bot/index.js';
 import { writeAuditLog } from './utils/logger.js';
-
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const BACKUP_DIR = path.resolve(process.cwd(), 'backups');
-const LOG_DIR = path.resolve(process.cwd(), 'logs');
+import { appConfig } from './config.js';
 
 async function ensureSecureDir(dir: string): Promise<void> {
   await fs.ensureDir(dir, { mode: 0o700 });
@@ -19,7 +15,11 @@ async function bootstrap(): Promise<void> {
   if (!token) {
     throw new Error('Переменная окружения BOT_TOKEN не задана.');
   }
-  await Promise.all([ensureSecureDir(DATA_DIR), ensureSecureDir(BACKUP_DIR), ensureSecureDir(LOG_DIR)]);
+  await Promise.all([
+    ensureSecureDir(appConfig.dataDir),
+    ensureSecureDir(appConfig.backupDir),
+    ensureSecureDir(appConfig.logDir)
+  ]);
   const bot = createBot(token);
   await bot.launch();
   console.log('Bot started');

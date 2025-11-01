@@ -1,0 +1,8 @@
+{
+  "$schema": "./schema.json",
+  "dataDir": "./data",
+  "backupDir": "./backups",
+  "logDir": "./logs",
+  "backupRetention": 20,
+  "schemaFile": "./data/schema.json"
+}
