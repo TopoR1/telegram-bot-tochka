@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "dataDir": { "type": "string" },
+    "backupDir": { "type": "string" },
+    "logDir": { "type": "string" },
+    "backupRetention": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "schemaFile": { "type": "string" }
+  },
+  "additionalProperties": false
+}
