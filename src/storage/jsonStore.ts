@@ -12,10 +12,16 @@ interface SchemaFile {
   stores?: Record<string, unknown>;
 }
 
+export interface MigrationResult<T> {
+  data: T;
+  migrated: boolean;
+}
+
 export interface JsonStoreOptions<T> {
   name: string;
   schemaKey?: string;
   defaultValue: () => T;
+  migrate?: (raw: unknown) => Promise<MigrationResult<T>> | MigrationResult<T>;
 }
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: true });
@@ -74,10 +80,13 @@ export class JsonStore<T> {
 
   private readonly validator: ValidateFunction<T>;
 
+  private readonly migrate?: (raw: unknown) => Promise<MigrationResult<T>> | MigrationResult<T>;
+
   constructor(options: JsonStoreOptions<T>) {
     this.schemaKey = options.schemaKey ?? options.name;
     this.filePath = path.join(DATA_DIR, `${options.name}.json`);
     this.defaultValue = options.defaultValue;
+    this.migrate = options.migrate;
     const schema = loadSchema(this.schemaKey);
     this.validator = ajv.compile<T>(schema as Record<string, unknown>);
   }
@@ -91,10 +100,26 @@ export class JsonStore<T> {
       return initial;
     }
     const raw = await fs.readFile(this.filePath, 'utf8');
-    const data = JSON.parse(raw) as T;
+    const parsed = JSON.parse(raw) as unknown;
+    let migrated = false;
+    let data: T;
+
+    if (this.migrate) {
+      const result = await this.migrate(parsed);
+      data = result.data;
+      migrated = result.migrated;
+    } else {
+      data = parsed as T;
+    }
+
     if (!this.validator(data)) {
       throw new Error(`Invalid data in ${this.filePath}: ${ajv.errorsText(this.validator.errors)}`);
     }
+
+    if (migrated) {
+      await this.write(data);
+    }
+
     return data;
   }
 
