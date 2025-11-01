@@ -8,6 +8,7 @@ import {
   handleCardsRequest,
   handleLastTaskButton
 } from './handlers/start.js';
+import { handleHelp } from './handlers/help.js';
 import { LAST_TASK_BUTTON_LABEL } from './keyboards/courier.js';
 import {
   handleGetAdmin,
@@ -23,6 +24,7 @@ export function createBot(token: string): Telegraf<BotContext> {
   bot.start(handleStart);
   bot.command('reset', handleReset);
   bot.command('cards', handleCardsRequest);
+  bot.command('help', handleHelp);
   bot.command('get_admin', handleGetAdmin);
   bot.command('bind_group', handleBindGroup);
   bot.command('announce', handleAnnounceCommand);
