@@ -165,11 +165,27 @@
   "stores": {
     "users": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/definitions/userRecord" }
+      "properties": {
+        "version": { "const": 1 },
+        "users": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/userRecord" }
+        }
+      },
+      "required": ["version", "users"],
+      "additionalProperties": false
     },
     "adminTables": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/definitions/adminTableMetadata" }
+      "properties": {
+        "version": { "const": 1 },
+        "tables": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/adminTableMetadata" }
+        }
+      },
+      "required": ["version", "tables"],
+      "additionalProperties": false
     },
     "couriers": {
       "type": "object",
@@ -182,27 +198,43 @@
     "deliveries": {
       "type": "object",
       "properties": {
-        "history": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/deliveryRecord" }
-        },
-        "byCourier": {
+        "version": { "const": 1 },
+        "items": {
           "type": "object",
-          "additionalProperties": {
-            "type": "array",
-            "items": { "$ref": "#/definitions/deliveryRecord" }
-          }
+          "properties": {
+            "history": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/deliveryRecord" }
+            },
+            "byCourier": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/deliveryRecord" }
+              }
+            }
+          },
+          "required": ["history", "byCourier"],
+          "additionalProperties": false
         }
       },
-      "required": ["history", "byCourier"],
+      "required": ["version", "items"],
       "additionalProperties": false
     },
     "groupBindings": {
       "type": "object",
-      "additionalProperties": {
-        "type": "array",
-        "items": { "$ref": "#/definitions/groupBinding" }
-      }
+      "properties": {
+        "version": { "const": 1 },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/groupBinding" }
+          }
+        }
+      },
+      "required": ["version", "bindings"],
+      "additionalProperties": false
     },
     "announcements": {
       "type": "array",

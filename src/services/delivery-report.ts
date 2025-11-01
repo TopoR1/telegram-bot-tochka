@@ -86,7 +86,7 @@ export async function collectDeliveryReport(
   uploadedAt: string
 ): Promise<DeliveryReportSummary | null> {
   const state = await deliveriesStore.read();
-  const batch = state.history.filter(
+  const batch = state.items.history.filter(
     (record) => record.adminId === adminId && record.uploadedAt === uploadedAt
   );
   if (!batch.length) {
