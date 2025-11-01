@@ -1,4 +1,4 @@
-import { Telegram } from 'telegraf';
+import { Markup, Telegram } from 'telegraf';
 import { BotContext } from '../types.js';
 import { ParsedXlsxResult, parseXlsx } from '../../services/xlsxParser.js';
 import { attachCouriers } from '../../services/courierMatcher.js';
@@ -10,7 +10,9 @@ import {
 } from '../../services/delivery-report.js';
 import { saveAdminTableMetadata } from '../../storage/adminTablesStore.js';
 import { updateAdmin } from '../../services/adminService.js';
-import { writeAuditLog } from '../../utils/logger.js';
+import { writeAuditLog, logError } from '../../utils/logger.js';
+import { listGroupBindings, recordAnnouncement } from '../../services/group-announcements.js';
+import { UPLOAD_ANNOUNCEMENT_MESSAGE } from '../messages/adminAnnouncements.js';
 
 interface UploadOptions {
   fileId: string;
@@ -25,6 +27,66 @@ async function loadFileBuffer(telegram: Telegram, fileId: string): Promise<Buffe
   }
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
+}
+
+async function publishUploadAnnouncement(ctx: BotContext, adminId: number): Promise<void> {
+  const bindings = ctx.adminProfile?.groupBindings ?? (await listGroupBindings(adminId));
+  if (ctx.adminProfile) {
+    ctx.adminProfile = { ...ctx.adminProfile, groupBindings: bindings };
+  }
+  if (!bindings.length) {
+    return;
+  }
+
+  const targets = bindings.filter((binding) => binding.messageThreadId !== undefined);
+  if (!targets.length) {
+    return;
+  }
+
+  const me = ctx.botInfo ?? (await ctx.telegram.getMe());
+  const botUsername = me.username;
+  if (!botUsername) {
+    await writeAuditLog({
+      name: 'admin.upload_announcement',
+      userId: adminId,
+      details: { stage: 'resolve_bot_username', error: 'username_not_available' }
+    });
+    return;
+  }
+
+  const keyboard = Markup.inlineKeyboard([
+    Markup.button.url('Открыть бота', `https://t.me/${botUsername}`)
+  ]);
+
+  for (const target of targets) {
+    try {
+      await ctx.telegram.sendMessage(target.chatId, UPLOAD_ANNOUNCEMENT_MESSAGE, {
+        message_thread_id: target.messageThreadId,
+        reply_markup: keyboard.reply_markup
+      });
+      await recordAnnouncement(adminId, target, UPLOAD_ANNOUNCEMENT_MESSAGE);
+      await writeAuditLog({
+        name: 'admin.upload_announcement',
+        userId: adminId,
+        details: {
+          chatId: target.chatId,
+          messageThreadId: target.messageThreadId,
+          status: 'sent'
+        }
+      });
+    } catch (err) {
+      await writeAuditLog({
+        name: 'admin.upload_announcement',
+        userId: adminId,
+        details: {
+          chatId: target.chatId,
+          messageThreadId: target.messageThreadId,
+          status: 'error',
+          error: logError(err)
+        }
+      });
+    }
+  }
 }
 
 export async function handleAdminUpload(
@@ -71,4 +133,6 @@ export async function handleAdminUpload(
       errors: report.errors
     }
   });
+
+  await publishUploadAnnouncement(ctx, adminId);
 }

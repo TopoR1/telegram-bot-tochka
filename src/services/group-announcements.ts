@@ -13,7 +13,9 @@ export async function saveGroupBinding(
 ): Promise<GroupBinding[]> {
   const current = await getGroupBindings(adminId);
   const filtered = current.filter(
-    (item) => item.chatId !== binding.chatId || (item.threadId ?? 0) !== (binding.threadId ?? 0)
+    (item) =>
+      item.chatId !== binding.chatId ||
+      (item.messageThreadId ?? 0) !== (binding.messageThreadId ?? 0)
   );
   const next = [...filtered, { ...binding }];
   await setGroupBindings(adminId, next);

@@ -16,7 +16,7 @@ export interface CourierRecord {
 export interface GroupBinding {
   chatId: number;
   title: string;
-  threadId?: number;
+  messageThreadId?: number;
 }
 
 export interface AdminRecord {

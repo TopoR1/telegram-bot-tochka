@@ -6,9 +6,15 @@ interface SessionState {
   selectedGroup?: {
     chatId: number;
     title: string;
-    threadId?: number;
+    messageThreadId?: number;
   };
   pendingAnnouncementText?: string;
+  awaitingTopicSelection?: boolean;
+  pendingGroupBinding?: {
+    chatId: number;
+    title: string;
+    forwardedThreadId?: number;
+  };
 }
 
 class SessionManager {
