@@ -1,23 +1,25 @@
 {
   "$schema": "./schema.json",
-  "botToken": "",
-  "botMode": "polling",
-  "polling": {
-    "timeout": 30,
-    "limit": 100,
-    "allowedUpdates": [],
-    "dropPendingUpdates": false
-  },
-  "webhook": {
-    "url": "",
-    "secret": "",
-    "port": 8443,
-    "host": "0.0.0.0",
-    "path": "/telegraf"
-  },
   "dataDir": "./data",
   "backupDir": "./backups",
   "logDir": "./logs",
   "backupRetention": 20,
-  "schemaFile": "./data/schema.json"
+  "schemaFile": "./data/schema.json",
+  "bot": {
+    "token": "",
+    "mode": "polling",
+    "polling": {
+      "timeout": 30,
+      "limit": 100,
+      "allowedUpdates": [],
+      "dropPendingUpdates": false
+    },
+    "webhook": {
+      "url": "",
+      "secret": "",
+      "port": 8443,
+      "host": "0.0.0.0",
+      "path": "/telegraf"
+    }
+  }
 }

@@ -51,16 +51,20 @@ interface PartialPollingConfig {
   dropPendingUpdates?: boolean;
 }
 
+interface PartialBotConfig {
+  token?: string;
+  mode?: BotMode;
+  polling?: PartialPollingConfig;
+  webhook?: PartialWebhookConfig;
+}
+
 interface ConfigFields {
   dataDir?: string;
   backupDir?: string;
   logDir?: string;
   backupRetention?: number;
   schemaFile?: string;
-  botToken?: string;
-  botMode?: BotMode;
-  webhook?: PartialWebhookConfig;
-  polling?: PartialPollingConfig;
+  bot?: PartialBotConfig;
 }
 
 const DEFAULTS: Required<Pick<ConfigFields, 'dataDir' | 'backupDir' | 'logDir' | 'backupRetention' | 'schemaFile'>> = {
@@ -163,6 +167,7 @@ function parseWebhookConfig(value: unknown): PartialWebhookConfig | undefined {
   }
   const data = value as Record<string, unknown>;
   const result: PartialWebhookConfig = {};
+
   const url = pickString(data.url);
   if (url) {
     result.url = url;
@@ -183,6 +188,7 @@ function parseWebhookConfig(value: unknown): PartialWebhookConfig | undefined {
   if (pathValue) {
     result.path = pathValue.startsWith('/') ? pathValue : `/${pathValue}`;
   }
+
   return Object.keys(result).length > 0 ? result : {};
 }
 
@@ -192,6 +198,7 @@ function parsePollingConfig(value: unknown): PartialPollingConfig | undefined {
   }
   const data = value as Record<string, unknown>;
   const result: PartialPollingConfig = {};
+
   const timeout = pickNonNegativeInt(data.timeout);
   if (timeout !== undefined) {
     result.timeout = timeout;
@@ -210,6 +217,34 @@ function parsePollingConfig(value: unknown): PartialPollingConfig | undefined {
   if (dropPending !== undefined) {
     result.dropPendingUpdates = dropPending;
   }
+
+  return Object.keys(result).length > 0 ? result : {};
+}
+
+function parseBotConfig(value: unknown): PartialBotConfig | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const data = value as Record<string, unknown>;
+  const result: PartialBotConfig = {};
+
+  const token = pickString(data.token);
+  if (token) {
+    result.token = token;
+  }
+  const mode = pickBotMode(data.mode);
+  if (mode) {
+    result.mode = mode;
+  }
+  const webhook = parseWebhookConfig(data.webhook);
+  if (webhook) {
+    result.webhook = webhook;
+  }
+  const polling = parsePollingConfig(data.polling);
+  if (polling) {
+    result.polling = polling;
+  }
+
   return Object.keys(result).length > 0 ? result : {};
 }
 
@@ -223,16 +258,14 @@ function readConfigFile(filePath: string): ConfigFields {
     throw new Error(`Файл конфигурации ${filePath} должен содержать JSON-объект.`);
   }
   const data = raw as Record<string, unknown>;
+
   return {
     dataDir: pickString(data.dataDir),
     backupDir: pickString(data.backupDir),
     logDir: pickString(data.logDir),
     backupRetention: pickPositiveInt(data.backupRetention),
     schemaFile: pickString(data.schemaFile),
-    botToken: pickString(data.botToken),
-    botMode: pickBotMode(data.botMode),
-    webhook: parseWebhookConfig(data.webhook),
-    polling: parsePollingConfig(data.polling)
+    bot: parseBotConfig(data.bot)
   };
 }
 
@@ -297,7 +330,19 @@ function hasMeaningfulWebhookSettings(config?: PartialWebhookConfig): boolean {
   if (!config) {
     return false;
   }
-  return Boolean(config.url || config.secret || config.path);
+  return Boolean(config.url || config.secret || config.port || config.path);
+}
+
+function hasMeaningfulPollingSettings(config?: PartialPollingConfig): boolean {
+  if (!config) {
+    return false;
+  }
+  return Boolean(
+    config.timeout !== undefined ||
+      config.limit !== undefined ||
+      config.allowedUpdates !== undefined ||
+      config.dropPendingUpdates !== undefined
+  );
 }
 
 const explicitConfigPath = pickString(process.env.BOT_CONFIG_PATH);
@@ -309,31 +354,29 @@ if (explicitConfigPath && Object.keys(fileConfig).length === 0) {
   throw new Error(`Файл конфигурации не найден по пути ${configPath}`);
 }
 
-const envWebhook = parseWebhookConfig({
-  url: process.env.BOT_WEBHOOK_URL,
-  secret: process.env.BOT_WEBHOOK_SECRET,
-  port: process.env.BOT_WEBHOOK_PORT,
-  host: process.env.BOT_WEBHOOK_HOST,
-  path: process.env.BOT_WEBHOOK_PATH
-});
-
-const envPolling = parsePollingConfig({
-  timeout: process.env.BOT_POLLING_TIMEOUT,
-  limit: process.env.BOT_POLLING_LIMIT,
-  allowedUpdates: process.env.BOT_POLLING_ALLOWED_UPDATES,
-  dropPendingUpdates: process.env.BOT_POLLING_DROP_PENDING
-});
-
 const envConfig: ConfigFields = {
   dataDir: pickString(process.env.BOT_DATA_DIR ?? process.env.DATA_DIR),
   backupDir: pickString(process.env.BOT_BACKUP_DIR ?? process.env.BACKUP_DIR),
   logDir: pickString(process.env.BOT_LOG_DIR ?? process.env.LOG_DIR),
   backupRetention: pickPositiveInt(process.env.BACKUP_RETENTION ?? process.env.BOT_BACKUP_RETENTION),
   schemaFile: pickString(process.env.BOT_SCHEMA_FILE ?? process.env.SCHEMA_FILE),
-  botToken: pickString(process.env.BOT_TOKEN),
-  botMode: pickBotMode(process.env.BOT_MODE),
-  webhook: envWebhook,
-  polling: envPolling
+  bot: {
+    token: pickString(process.env.BOT_TOKEN),
+    mode: pickBotMode(process.env.BOT_MODE),
+    webhook: parseWebhookConfig({
+      url: process.env.BOT_WEBHOOK_URL,
+      secret: process.env.BOT_WEBHOOK_SECRET,
+      port: process.env.BOT_WEBHOOK_PORT,
+      host: process.env.BOT_WEBHOOK_HOST,
+      path: process.env.BOT_WEBHOOK_PATH
+    }),
+    polling: parsePollingConfig({
+      timeout: process.env.BOT_POLLING_TIMEOUT,
+      limit: process.env.BOT_POLLING_LIMIT,
+      allowedUpdates: process.env.BOT_POLLING_ALLOWED_UPDATES,
+      dropPendingUpdates: process.env.BOT_POLLING_DROP_PENDING
+    })
+  }
 };
 
 const dataDirRaw = envConfig.dataDir ?? fileConfig.dataDir ?? DEFAULTS.dataDir;
@@ -346,23 +389,21 @@ if (!Number.isFinite(backupRetention) || backupRetention <= 0) {
   backupRetention = DEFAULTS.backupRetention;
 }
 
-const botToken = envConfig.botToken ?? fileConfig.botToken;
+const fileBot = fileConfig.bot ?? {};
+const envBot = envConfig.bot ?? {};
+
+const botToken = envBot.token ?? fileBot.token;
 if (!botToken) {
-  throw new Error('Токен Telegram-бота не задан. Используйте переменную окружения BOT_TOKEN или поле botToken в конфигурации.');
+  throw new Error('Токен Telegram-бота не задан. Используйте переменную окружения BOT_TOKEN или поле bot.token в конфигурации.');
 }
 
-const botMode = envConfig.botMode ?? fileConfig.botMode ?? DEFAULT_BOT_MODE;
+const botMode = envBot.mode ?? fileBot.mode ?? DEFAULT_BOT_MODE;
 
-const webhookConfig = mergeWebhookConfig(fileConfig.webhook, envConfig.webhook);
-const pollingConfig = mergePollingConfig(fileConfig.polling, envConfig.polling);
+const webhookConfig = mergeWebhookConfig(fileBot.webhook, envBot.webhook);
+const pollingConfig = mergePollingConfig(fileBot.polling, envBot.polling);
 
 const hasWebhookSettings = hasMeaningfulWebhookSettings(webhookConfig);
-const hasPollingSettings = Boolean(pollingConfig && (
-  pollingConfig.timeout !== undefined ||
-  pollingConfig.limit !== undefined ||
-  pollingConfig.allowedUpdates !== undefined ||
-  pollingConfig.dropPendingUpdates !== undefined
-));
+const hasPollingSettings = hasMeaningfulPollingSettings(pollingConfig);
 
 if (botMode === 'polling' && hasWebhookSettings) {
   throw new Error('Настройки webhook заданы одновременно с режимом polling. Удалите параметры webhook или переключитесь в режим webhook.');
@@ -380,9 +421,9 @@ if (botMode === 'webhook') {
 let resolvedWebhook: WebhookConfig | undefined;
 if (botMode === 'webhook' && webhookConfig) {
   resolvedWebhook = {
-    url: webhookConfig.url,
-    secret: webhookConfig.secret,
-    port: webhookConfig.port,
+    url: webhookConfig.url!,
+    secret: webhookConfig.secret!,
+    port: webhookConfig.port!,
     host: webhookConfig.host,
     path: webhookConfig.path
   };
