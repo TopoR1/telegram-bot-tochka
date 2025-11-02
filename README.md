@@ -13,19 +13,38 @@
    ```bash
    npm install
    ```
-2. Задайте переменные окружения (минимально требуется токен бота Telegram):
+2. Задайте переменные окружения (минимально необходимо передать токен — через конфиг или переменную `BOT_TOKEN`). Пример `.env`:
    ```bash
    cp .env.example .env   # если файл примера присутствует; иначе создайте вручную
-   echo "BOT_TOKEN=123456:ABC" >> .env
+   cat <<'EOF' >> .env
+   BOT_TOKEN=123456:ABC
+   BOT_MODE=polling            # или webhook
+   # Параметры webhook-режима (используются, если BOT_MODE=webhook):
+   # BOT_WEBHOOK_URL=https://example.com/telegram
+   # BOT_WEBHOOK_SECRET=change-me
+   # BOT_WEBHOOK_PORT=8443
+   # BOT_WEBHOOK_HOST=0.0.0.0
+   # BOT_WEBHOOK_PATH=/telegraf
+   # Параметры long polling (опционально):
+   # BOT_POLLING_TIMEOUT=30
+   # BOT_POLLING_LIMIT=100
+   # BOT_POLLING_ALLOWED_UPDATES=message,callback_query
+   # BOT_POLLING_DROP_PENDING=false
+   EOF
    ```
-3. При необходимости отредактируйте `config/default.json` или создайте собственный конфиг:
+   Директории и другие пути можно переопределять переменными `BOT_DATA_DIR`, `BOT_BACKUP_DIR`, `BOT_LOG_DIR`, `BOT_SCHEMA_FILE`, а также `BACKUP_RETENTION`.
+3. При необходимости отредактируйте `config/default.json` или создайте собственный конфиг. В файле уже присутствуют заготовки для новых опций:
+   - `botToken` — строка с токеном бота. Можно оставить пустой и использовать переменную `BOT_TOKEN`, чтобы не хранить секрет в git.
+   - `botMode` — режим работы (`polling` или `webhook`).
+   - `polling` — настройки long polling (`timeout`, `limit`, `allowedUpdates`, `dropPendingUpdates`).
+   - `webhook` — настройки вебхука (`url`, `secret`, `port`, опционально `host` и `path`).
    - `dataDir` — где хранить рабочие JSON-файлы.
    - `backupDir` — директория для резервных копий.
    - `logDir` — куда писать `audit.log`.
    - `backupRetention` — сколько бэкапов одного типа хранить (по умолчанию 20).
    - `schemaFile` — путь до файла схемы JSON-хранилищ.
 
-   Можно задать альтернативный путь через переменную `BOT_CONFIG_PATH`, а отдельные поля переопределить переменными `BOT_DATA_DIR`, `BOT_BACKUP_DIR`, `BOT_LOG_DIR`, `BOT_SCHEMA_FILE` или `BACKUP_RETENTION`.
+   Можно задать альтернативный путь к конфигу через `BOT_CONFIG_PATH`, а любые поля переопределить соответствующими переменными окружения (`BOT_MODE`, `BOT_WEBHOOK_URL` и т.д.).
 
 4. Создайте каталоги для данных и журналов. По умолчанию приложение использует подкаталоги от рабочей директории процесса
    (настройки берутся из конфигурации):
