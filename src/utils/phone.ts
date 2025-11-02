@@ -1,4 +1,6 @@
-import { clamp } from 'lodash';
+import lodash from 'lodash';
+
+const clamp: typeof lodash.clamp = lodash.clamp;
 
 const PHONE_LENGTH = 11;
 
