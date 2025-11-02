@@ -33,16 +33,46 @@
    EOF
    ```
    Директории и другие пути можно переопределять переменными `BOT_DATA_DIR`, `BOT_BACKUP_DIR`, `BOT_LOG_DIR`, `BOT_SCHEMA_FILE`, а также `BACKUP_RETENTION`.
-3. При необходимости отредактируйте `config/default.json` или создайте собственный конфиг. В файле уже присутствуют заготовки для новых опций:
-   - `botToken` — строка с токеном бота. Можно оставить пустой и использовать переменную `BOT_TOKEN`, чтобы не хранить секрет в git.
-   - `botMode` — режим работы (`polling` или `webhook`).
-   - `polling` — настройки long polling (`timeout`, `limit`, `allowedUpdates`, `dropPendingUpdates`).
-   - `webhook` — настройки вебхука (`url`, `secret`, `port`, опционально `host` и `path`).
-   - `dataDir` — где хранить рабочие JSON-файлы.
-   - `backupDir` — директория для резервных копий.
-   - `logDir` — куда писать `audit.log`.
-   - `backupRetention` — сколько бэкапов одного типа хранить (по умолчанию 20).
-   - `schemaFile` — путь до файла схемы JSON-хранилищ.
+
+### Несовместимые изменения конфигурации
+
+Версия ветки `work` объединяет настройки старой схемы и нового конфигуратора бота. Чтобы перейти на неё:
+
+- Переместите значения из полей `botToken` и `botMode` в объект `bot.token` и `bot.mode`.
+- Настройки `polling` и `webhook` теперь находятся внутри `bot.polling` и `bot.webhook` соответственно.
+- Остальные пути (`dataDir`, `backupDir`, `logDir`, `backupRetention`, `schemaFile`) остались на верхнем уровне, поэтому их перенос не требуется.
+
+3. При необходимости отредактируйте `config/default.json` или создайте собственный конфиг. Итоговая структура файла такова:
+
+   ```json
+   {
+     "$schema": "./schema.json",
+     "dataDir": "./data",
+     "backupDir": "./backups",
+     "logDir": "./logs",
+     "backupRetention": 20,
+     "schemaFile": "./data/schema.json",
+     "bot": {
+       "token": "",
+       "mode": "polling",
+       "polling": {
+         "timeout": 30,
+         "limit": 100,
+         "allowedUpdates": [],
+         "dropPendingUpdates": false
+       },
+       "webhook": {
+         "url": "",
+         "secret": "",
+         "port": 8443,
+         "host": "0.0.0.0",
+         "path": "/telegraf"
+       }
+     }
+   }
+   ```
+
+   Поле `bot.token` можно оставить пустым и задавать секрет через переменную окружения `BOT_TOKEN`. Порядок переопределений следующий: значения из переменных окружения → значения из пользовательского JSON-конфига → значения по умолчанию из `config/default.json`.
 
    Можно задать альтернативный путь к конфигу через `BOT_CONFIG_PATH`, а любые поля переопределить соответствующими переменными окружения (`BOT_MODE`, `BOT_WEBHOOK_URL` и т.д.).
 

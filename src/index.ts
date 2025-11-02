@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import process from 'process';
 import fs from 'fs-extra';
-import type { LaunchOptions } from 'telegraf';
 import { createBot } from './bot/index.js';
 import { writeAuditLog } from './utils/logger.js';
 import { appConfig } from './config.js';
@@ -22,7 +21,8 @@ async function bootstrap(): Promise<void> {
 
   const bot = createBot(botSettings.token);
 
-  let launchOptions: LaunchOptions | undefined;
+  type BotLaunchOptions = Parameters<typeof bot.launch>[0];
+  let launchOptions: BotLaunchOptions | undefined;
 
   if (botSettings.mode === 'webhook') {
     const webhook = botSettings.webhook;
@@ -62,7 +62,7 @@ async function bootstrap(): Promise<void> {
     }
 
     if (Object.keys(pollingOptions).length > 0) {
-      launchOptions = { polling: pollingOptions };
+      launchOptions = { polling: pollingOptions } as BotLaunchOptions;
     }
   }
 
