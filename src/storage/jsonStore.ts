@@ -2,11 +2,12 @@ import fs from 'fs-extra';
 import path from 'path';
 import { FileHandle, open } from 'fs/promises';
 import Ajv, { ValidateFunction } from 'ajv';
+import { appConfig } from '../config.js';
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const BACKUP_DIR = path.resolve(process.cwd(), 'backups');
-const SCHEMA_PATH = path.join(DATA_DIR, 'schema.json');
-const BACKUP_LIMIT = 20;
+const DATA_DIR = appConfig.dataDir;
+const BACKUP_DIR = appConfig.backupDir;
+const SCHEMA_PATH = appConfig.schemaFile;
+const BACKUP_LIMIT = appConfig.backupRetention;
 
 interface SchemaFile {
   stores?: Record<string, unknown>;

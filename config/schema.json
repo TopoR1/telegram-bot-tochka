@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "bot": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "minLength": 1 },
+        "mode": { "type": "string", "enum": ["polling", "webhook"] },
+        "polling": {
+          "type": "object",
+          "properties": {
+            "timeout": { "type": "integer", "minimum": 1 },
+            "limit": { "type": "integer", "minimum": 1 },
+            "allowedUpdates": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1
+            },
+            "dropPendingUpdates": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "webhook": {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "minLength": 1 },
+            "port": { "type": "integer", "minimum": 1 },
+            "secret": { "type": "string" },
+            "host": { "type": "string" },
+            "keyPath": { "type": "string" },
+            "certPath": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "dataDir": { "type": "string" },
+    "backupDir": { "type": "string" },
+    "logDir": { "type": "string" },
+    "backupRetention": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "schemaFile": { "type": "string" }
+  },
+  "additionalProperties": false
+}

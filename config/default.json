@@ -1,0 +1,16 @@
+{
+  "$schema": "./schema.json",
+  "bot": {
+    "mode": "polling",
+    "polling": {
+      "timeout": 30,
+      "limit": 100,
+      "dropPendingUpdates": true
+    }
+  },
+  "dataDir": "./data",
+  "backupDir": "./backups",
+  "logDir": "./logs",
+  "backupRetention": 20,
+  "schemaFile": "./data/schema.json"
+}

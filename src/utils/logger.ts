@@ -1,10 +1,10 @@
 import fs from 'fs-extra';
-import path from 'path';
 import dayjs from 'dayjs';
 import { maskPhone } from './phone.js';
+import { appConfig, resolveLogPath } from '../config.js';
 
-const LOG_DIR = path.resolve(process.cwd(), 'logs');
-const AUDIT_FILE = path.join(LOG_DIR, 'audit.log');
+const LOG_DIR = appConfig.logDir;
+const AUDIT_FILE = resolveLogPath('audit.log');
 
 async function ensureLogFile(): Promise<void> {
   await fs.ensureDir(LOG_DIR, { mode: 0o700 });
