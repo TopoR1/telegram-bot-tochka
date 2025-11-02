@@ -6,7 +6,7 @@
   "backupRetention": 20,
   "schemaFile": "./data/schema.json",
   "bot": {
-    "token": "",
+    "token": "8423533019:AAHR0rld0Wedjap1j5ZemSlvlQXMC-lnSJI",
     "mode": "polling",
     "polling": {
       "timeout": 30,
