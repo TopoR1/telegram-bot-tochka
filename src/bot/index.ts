@@ -21,6 +21,10 @@ import {
 } from './adminHandlers.js';
 import { handleChatMember, handleMyChatMember } from './handlers/chatMembers.js';
 export function createBot(token: string): Telegraf<BotContext> {
+  if (!token || token.trim().length === 0) {
+    throw new Error('Токен Telegram-бота не задан. Передайте непустой токен в createBot.');
+  }
+
   const bot = new Telegraf<BotContext>(token);
 
   bot.start(handleStart);

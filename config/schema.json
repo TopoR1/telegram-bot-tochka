@@ -10,7 +10,61 @@
       "minimum": 1,
       "maximum": 1000
     },
-    "schemaFile": { "type": "string" }
+    "schemaFile": { "type": "string" },
+    "botToken": { "type": "string" },
+    "botMode": {
+      "type": "string",
+      "enum": ["polling", "webhook"]
+    },
+    "polling": {
+      "type": "object",
+      "properties": {
+        "timeout": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "allowedUpdates": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "dropPendingUpdates": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "secret": { "type": "string" },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "host": { "type": "string" },
+        "path": { "type": "string" }
+      },
+      "required": ["url", "secret", "port"],
+      "additionalProperties": false
+    }
   },
-  "additionalProperties": false
+  "required": ["botToken", "botMode"],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": { "botMode": { "const": "webhook" } }
+      },
+      "then": {
+        "required": ["webhook"],
+        "properties": {
+          "polling": false
+        }
+      }
+    }
+  ]
 }
