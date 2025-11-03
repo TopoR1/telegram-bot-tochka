@@ -1,5 +1,5 @@
 import { JsonStore } from './jsonStore.js';
-const DELIVERIES_STORE_VERSION = 1;
+const DELIVERIES_STORE_VERSION = 2;
 const PER_COURIER_LIMIT = 50;
 function cloneRecord(record) {
     return { ...record };

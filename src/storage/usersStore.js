@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { JsonStore } from './jsonStore.js';
-const USERS_STORE_VERSION = 1;
+const USERS_STORE_VERSION = 2;
 function isUserRecord(value) {
     if (!value || typeof value !== 'object') {
         return false;

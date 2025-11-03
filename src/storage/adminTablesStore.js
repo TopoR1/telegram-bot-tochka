@@ -1,5 +1,5 @@
 import { JsonStore } from './jsonStore.js';
-const ADMIN_TABLES_VERSION = 1;
+const ADMIN_TABLES_VERSION = 2;
 function isAdminTableMetadata(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return false;
