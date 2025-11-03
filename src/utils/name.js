@@ -1,8 +1,9 @@
 const CONNECTORS = [' ', '-', '\t'];
+const CONNECTOR_PATTERN = new RegExp(`[${CONNECTORS.map((connector) => connector.replace(/[-\\^$*+?.()|[\]{}]/g, '\\$&')).join('')}]`, 'g');
 export function normalizeFullName(raw) {
     const trimmed = raw.trim().replace(/\s+/g, ' ');
     const parts = trimmed
-        .split(new RegExp(`[${CONNECTORS.join('')}]`, 'g'))
+        .split(CONNECTOR_PATTERN)
         .filter(Boolean)
         .map((part) => part.toLowerCase())
         .map((part) => part.replace(/^\p{L}/u, (letter) => letter.toUpperCase()))
