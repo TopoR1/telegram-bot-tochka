@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { open } from 'fs/promises';
+import { pathToFileURL } from 'url';
 import Ajv from 'ajv';
 import { appConfig } from '../config.js';
 
@@ -23,8 +24,9 @@ const DATA_DIR = appConfig.dataDir;
 const BACKUP_DIR = appConfig.backupDir;
 const SCHEMA_PATH = appConfig.schemaFile;
 const BACKUP_LIMIT = appConfig.backupRetention;
-const ajv = new Ajv({ allErrors: true, removeAdditional: true });
+const ajv = new Ajv({ allErrors: true, removeAdditional: true, strict: false });
 let schemaCache = null;
+let rootSchemaId = null;
 async function ensureSecureDir(dir) {
     await fs.ensureDir(dir, { mode: 0o700 });
     await fs.chmod(dir, 0o700);
@@ -51,19 +53,28 @@ async function syncAndClose(handle) {
         await handle.close();
     }
 }
-function loadSchema(schemaKey) {
+function ensureSchemaLoaded() {
     if (!schemaCache) {
         if (!fs.existsSync(SCHEMA_PATH)) {
             throw new Error(`Schema file not found at ${SCHEMA_PATH}`);
         }
-        schemaCache = fs.readJsonSync(SCHEMA_PATH);
+        const loaded = fs.readJsonSync(SCHEMA_PATH);
+        const schemaId = typeof loaded.$id === 'string' && loaded.$id.length > 0
+            ? loaded.$id
+            : pathToFileURL(SCHEMA_PATH).href;
+        schemaCache = loaded.$id === schemaId ? loaded : { ...loaded, $id: schemaId };
+        rootSchemaId = schemaCache.$id;
+        ajv.addSchema(schemaCache, rootSchemaId);
     }
-    const storeSchemas = schemaCache.stores ?? {};
-    const schema = storeSchemas[schemaKey];
-    if (!schema) {
+    return schemaCache;
+}
+function loadSchema(schemaKey) {
+    const schema = ensureSchemaLoaded();
+    const storeSchemas = schema.stores ?? {};
+    if (!(schemaKey in storeSchemas)) {
         throw new Error(`Schema for store "${schemaKey}" not found in ${SCHEMA_PATH}`);
     }
-    return schema;
+    return { $ref: `${rootSchemaId}#/stores/${schemaKey}` };
 }
 /**
  * Persistent JSON storage with schema validation and automatic backups.
