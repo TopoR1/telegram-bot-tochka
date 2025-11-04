@@ -8,6 +8,8 @@ import { upsertUser, markTaskRequest } from '../../storage/usersStore.js';
 import { searchLatestTasks } from '../../services/task-search.js';
 import { buildTaskCard } from '../messages/taskCard.js';
 import { createCourierStartKeyboard, REGISTRATION_HINT_LABEL, FULL_NAME_HINT_LABEL, ADMIN_MODE_HINT_LABEL } from '../keyboards/courier.js';
+
+const UNKNOWN_INPUT_REPLY = 'Я пока не знаю, что на это ответить. Попробуйте использовать команды или кнопку «Получить последнее задание».';
 function collectProfile(ctx) {
     if (!ctx.from)
         return {};
@@ -23,6 +25,37 @@ function resolveCourierStatus(courier) {
     const awaitingFullName = Boolean((courier?.awaitingFullName ?? (!courier?.fullName && hasPhone)));
     const isRegistered = hasPhone && !awaitingFullName;
     return { hasPhone, awaitingFullName, isRegistered };
+}
+
+async function ensureCourierContext(ctx) {
+    if (!ctx.from) {
+        const status = resolveCourierStatus(undefined);
+        return { courier: undefined, status };
+    }
+    let courier = ctx.courierProfile;
+    if (!courier) {
+        courier = await getCourier(ctx.from.id);
+        if (courier) {
+            ctx.courierProfile = courier;
+        }
+    }
+    const status = resolveCourierStatus(courier);
+    ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: status.awaitingFullName };
+    return { courier, status };
+}
+
+async function replyUnknownInput(ctx, context = {}) {
+    if (!ctx.from) {
+        return;
+    }
+    const status = context.status ?? (await ensureCourierContext(ctx)).status;
+    const adminMode = context.adminMode ?? (await isAdmin(ctx.from.id));
+    const keyboard = createCourierStartKeyboard({
+        isRegistered: status.isRegistered,
+        isAdmin: adminMode,
+        awaitingFullName: status.awaitingFullName
+    });
+    await ctx.reply(UNKNOWN_INPUT_REPLY, keyboard);
 }
 
 async function guardTaskAccess(ctx) {
@@ -93,9 +126,17 @@ async function handlePhoneSubmission(ctx, rawPhone, options) {
         await ctx.reply('Упс, не распознал номер. Проверьте формат 8XXXXXXXXXX и попробуйте снова. 📞');
         return;
     }
-    const adminMode = await isAdmin(ctx.from.id);
+    const adminModePromise = isAdmin(ctx.from.id);
+    const { courier: existingCourier, status: existingStatus } = await ensureCourierContext(ctx);
+    if (existingStatus.isRegistered) {
+        const adminMode = await adminModePromise;
+        await replyUnknownInput(ctx, { status: existingStatus, adminMode });
+        persistSession(ctx);
+        return;
+    }
+    const adminMode = await adminModePromise;
     const profile = collectProfile(ctx);
-    const awaitingFullName = Boolean(ctx.sessionState?.awaitingFullName || !ctx.courierProfile?.fullName);
+    const awaitingFullName = Boolean(ctx.sessionState?.awaitingFullName || !existingCourier?.fullName);
     const courier = await getOrCreateCourier(ctx.from.id, {
         ...profile,
         phone: normalizedPhone,
@@ -201,6 +242,12 @@ export async function handleContact(ctx) {
         await ctx.reply('Похоже, контакт с другого номера. Отправьте, пожалуйста, контакт со своего телефона. 📱');
         return;
     }
+    const { status } = await ensureCourierContext(ctx);
+    if (status.isRegistered) {
+        await replyUnknownInput(ctx, { status });
+        persistSession(ctx);
+        return;
+    }
     await handlePhoneSubmission(ctx, contact.phone_number, { validated: true });
 }
 export async function handleText(ctx) {
@@ -210,6 +257,7 @@ export async function handleText(ctx) {
     const raw = ctx.message.text.trim();
     if (!raw)
         return;
+    const { status } = await ensureCourierContext(ctx);
     if (raw === REGISTRATION_HINT_LABEL) {
         await ctx.reply('Чтобы получить задания, поделитесь номером телефона через кнопку или отправьте его в формате 8XXXXXXXXXX.');
         return;
@@ -269,7 +317,17 @@ export async function handleText(ctx) {
     }
     const digitsCount = raw.replace(/\D/g, '').length;
     if (digitsCount >= 10) {
+        if (status.isRegistered) {
+            await replyUnknownInput(ctx, { status });
+            persistSession(ctx);
+            return;
+        }
         await handlePhoneSubmission(ctx, raw, { validated: false });
+        return;
+    }
+    if (status.isRegistered) {
+        await replyUnknownInput(ctx, { status });
+        persistSession(ctx);
     }
 }
 export async function handleCardsRequest(ctx) {

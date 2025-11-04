@@ -12,27 +12,24 @@ export const ADMIN_MODE_HINT_LABEL = 'ℹ️ Курьерский режим н�
  */
 export function createCourierStartKeyboard(options = {}) {
     const { isRegistered = false, isAdmin = false, awaitingFullName = false } = options;
-    if (isRegistered && !isAdmin) {
+    if (isAdmin) {
+        return Markup.keyboard([[ADMIN_MODE_HINT_LABEL]])
+            .oneTime()
+            .resize();
+    }
+    if (isRegistered) {
         return Markup.keyboard([[LAST_TASK_BUTTON_LABEL]])
             .persistent()
             .resize();
     }
-    if (!isRegistered) {
-        const rows = [
-            [Markup.button.contactRequest(PHONE_BUTTON_LABEL)],
-            [REGISTRATION_HINT_LABEL]
-        ];
-        if (awaitingFullName) {
-            rows.push([FULL_NAME_HINT_LABEL]);
-        }
-        if (isAdmin) {
-            rows.push([ADMIN_MODE_HINT_LABEL]);
-        }
-        return Markup.keyboard(rows)
-            .oneTime()
-            .resize();
+    const rows = [
+        [Markup.button.contactRequest(PHONE_BUTTON_LABEL)],
+        [REGISTRATION_HINT_LABEL]
+    ];
+    if (awaitingFullName) {
+        rows.push([FULL_NAME_HINT_LABEL]);
     }
-    return Markup.keyboard([[ADMIN_MODE_HINT_LABEL]])
+    return Markup.keyboard(rows)
         .oneTime()
         .resize();
 }
