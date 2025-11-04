@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const fetchMock = vi.fn();
+const downloadFileBufferMock = vi.fn();
 
-vi.mock('../../../src/utils/http-client.js', () => ({
-  fetch: fetchMock
+vi.mock('../../../src/services/file-downloader.js', () => ({
+  downloadFileBuffer: downloadFileBufferMock
 }));
 
 const parseXlsxMock = vi.fn();
@@ -69,12 +69,8 @@ describe('handleAdminUpload', () => {
     const adminId = 123;
     const uploadTime = new Date('2024-01-01T10:00:00Z');
     const buffer = Buffer.from('mock-file');
-    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 
-    fetchMock.mockResolvedValue({
-      ok: true,
-      arrayBuffer: () => Promise.resolve(arrayBuffer)
-    });
+    downloadFileBufferMock.mockResolvedValue(buffer);
 
     parseXlsxMock.mockResolvedValue({
       uploadedAt: uploadTime,
@@ -115,7 +111,8 @@ describe('handleAdminUpload', () => {
 
     await handleAdminUpload(ctx, adminId, { fileId: 'file-id', fileName: 'upload.xlsx' });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(downloadFileBufferMock).toHaveBeenCalledTimes(1);
+    expect(downloadFileBufferMock).toHaveBeenCalledWith('https://example.com/file.xlsx');
     expect(parseXlsxMock).toHaveBeenCalledWith(expect.any(Buffer), adminId);
     expect(saveAdminTableMetadataMock).toHaveBeenCalledWith(adminId, expect.objectContaining({
       uploadedAt: uploadTime
