@@ -81,6 +81,21 @@ export async function updateCourier(telegramId, updater) {
   });
   return updated;
 }
+
+/**
+ * Возвращает данные курьера без создания новой записи.
+ *
+ * @param {number} telegramId
+ * @returns {Promise<CourierRecord | undefined>}
+ */
+export async function getCourier(telegramId) {
+  if (!Number.isInteger(telegramId)) {
+    throw new TypeError('telegramId must be an integer');
+  }
+  const collection = await courierStore.read();
+  const record = collection[telegramId.toString()];
+  return record ? { ...record } : undefined;
+}
 /**
  * @param {number} telegramId
  * @returns {Promise<CourierRecord | undefined>}
