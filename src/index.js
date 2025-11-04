@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import process from 'process';
 import fs from 'fs-extra';
+import './polyfills/fetch.js';
 import { createBot } from './bot/index.js';
 import { writeAuditLog } from './utils/logger.js';
 import { appConfig } from './config.js';
