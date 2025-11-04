@@ -9,6 +9,7 @@ import { updateAdmin } from '../../services/adminService.js';
 import { writeAuditLog, logError } from '../../utils/logger.js';
 import { listGroupBindings, recordAnnouncement } from '../../services/group-announcements.js';
 import { UPLOAD_ANNOUNCEMENT_MESSAGE } from '../messages/adminAnnouncements.js';
+import { replyWithLimitedText } from '../../utils/telegram.js';
 async function publishUploadAnnouncement(ctx, adminId) {
     const bindings = ctx.adminProfile?.groupBindings ?? (await listGroupBindings(adminId));
     if (ctx.adminProfile) {
@@ -79,7 +80,7 @@ export async function handleAdminUpload(ctx, adminId, options) {
     const report = (await collectDeliveryReport(adminId, parsed.uploadedAt)) ??
         summarizeDeliveryRecords(adminId, parsed.uploadedAt, broadcastResult.records);
     const reportText = formatDeliveryReport(report);
-    await ctx.reply(reportText);
+    await replyWithLimitedText(ctx, reportText);
     await updateAdmin(adminId, (existing) => ({
         ...existing,
         lastUploadAt: parsed.uploadedAt
