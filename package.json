@@ -2,11 +2,11 @@
   "name": "telegram-bot-tochka",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/index.js",
+  "main": "./src/index.js",
   "scripts": {
     "build": "npm run lint",
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node ./src/index.js",
+    "dev": "nodemon ./src/index.js",
     "lint": "eslint \"src/**/*.js\"",
     "test": "vitest run"
   },
