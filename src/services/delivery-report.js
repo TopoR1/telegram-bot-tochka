@@ -103,22 +103,14 @@ export async function collectDeliveryReport(adminId, uploadedAt) {
     return summarizeDeliveryRecords(adminId, uploadedAt, batch);
 }
 /**
- * @param {DeliveryIssue} issue
- * @param {number} index
- * @returns {string}
+ * @param {DeliveryIssue[]} issues
+ * @returns {string[]}
  */
-function formatIssue(issue, index) {
-    const statusLabel = issue.status === 'skipped' ? 'Пропущено' : 'Ошибка';
-    const orderLabel = issue.orderId ? `#${issue.orderId}` : issue.id;
-    const identityParts = [orderLabel];
-    if (issue.courierFullName) {
-        identityParts.push(issue.courierFullName);
-    }
-    if (issue.courierPhone) {
-        identityParts.push(issue.courierPhone);
-    }
-    const identity = identityParts.join(' • ');
-    return `${index + 1}. [${statusLabel}] ${identity} — ${issue.reason}`;
+function collectAffectedCourierNames(issues) {
+    const names = issues
+        .map((issue) => issue.courierFullName?.trim())
+        .filter((name) => Boolean(name));
+    return [...new Set(names)];
 }
 /**
  * @param {DeliverySummary} summary
@@ -136,10 +128,13 @@ export function formatDeliveryReport(summary) {
         `Ошибок: ${summary.errors}`
     ];
     if (summary.issues.length) {
-        lines.push('', 'Не отправлено:');
-        summary.issues.forEach((issue, index) => {
-            lines.push(formatIssue(issue, index));
-        });
+        const affected = collectAffectedCourierNames(summary.issues);
+        if (affected.length) {
+            lines.push('', 'Не получили задания:');
+            affected.forEach((name, index) => {
+                lines.push(`${index + 1}. ${name}`);
+            });
+        }
     }
     return lines.join('\n');
 }
