@@ -3,9 +3,9 @@ import {
     ReadableStream,
     WritableStream,
     TransformStream
-} from 'web-streams-polyfill/ponyfill/es2018';
+} from 'web-streams-polyfill/dist/ponyfill.es2018.js';
 
-const bindings = {
+const ponyfills = {
     fetch,
     Headers,
     Request,
@@ -15,10 +15,10 @@ const bindings = {
     TransformStream
 };
 
-for (const [name, value] of Object.entries(bindings)) {
+for (const [name, value] of Object.entries(ponyfills)) {
     if (value && !globalThis[name]) {
         globalThis[name] = value;
     }
 }
 
-export { fetch };
+export { fetch, ReadableStream };
