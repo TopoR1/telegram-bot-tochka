@@ -4,6 +4,7 @@ import { getOrCreateAdmin } from '../services/adminService.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
 import { listGroupBindings, saveGroupBinding, recordAnnouncement } from '../services/group-announcements.js';
 import { handleAdminUpload } from './handlers/adminUpload.js';
+import { JsonValidationError } from '../storage/jsonStore.js';
 export async function handleGetAdmin(ctx) {
     attachSession(ctx);
     if (!ctx.from)
@@ -146,6 +147,23 @@ export async function handleDocument(ctx) {
         });
     }
     catch (err) {
+        if (err instanceof JsonValidationError) {
+            const lines = [`Не удалось обработать файл: ${err.summary}`];
+            if (err.examples.length) {
+                lines.push('', 'Первые несоответствия:');
+                err.examples.forEach((example) => {
+                    lines.push(`• ${example}`);
+                });
+            }
+            if (err.truncated > 0) {
+                lines.push(`… и ещё ${err.truncated} ошибок.`);
+            }
+            if (err.logFilePath) {
+                lines.push('', `Полный отчёт: ${err.logFilePath}`);
+            }
+            await ctx.reply(lines.join('\n'));
+            return;
+        }
         await ctx.reply(`Не удалось обработать файл: ${logError(err)}.`);
     }
 }

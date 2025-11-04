@@ -3,8 +3,8 @@ import path from 'path';
 import { access as accessAsync, open } from 'fs/promises';
 import { pathToFileURL } from 'url';
 import Ajv from 'ajv';
-import { appConfig } from '../config.js';
-import { logError } from '../utils/logger.js';
+import { appConfig, resolveLogPath } from '../config.js';
+import { logError, logValidationErrorDetails } from '../utils/logger.js';
 
 /**
  * @template T
@@ -26,6 +26,15 @@ const BACKUP_DIR = appConfig.backupDir;
 const SCHEMA_PATH = appConfig.schemaFile;
 const BACKUP_LIMIT = appConfig.backupRetention;
 const ajv = new Ajv({ allErrors: true, removeAdditional: true, strict: false });
+const VALIDATION_ERROR_LIMIT = 5;
+const VALIDATION_LOG_FILE = resolveLogPath('validation-errors.log');
+const VALIDATION_LOG_RELATIVE = (() => {
+  const relative = path.relative(process.cwd(), VALIDATION_LOG_FILE);
+  if (!relative || relative.startsWith('..')) {
+    return VALIDATION_LOG_FILE;
+  }
+  return relative;
+})();
 let schemaCache = null;
 let rootSchemaId = null;
 const READ_ACCESS_FLAG = fs.constants && typeof fs.constants.R_OK === 'number' ? fs.constants.R_OK : 0;
@@ -53,6 +62,161 @@ function reportPermissionError(action, target, error, level = 'error') {
     if (error && typeof error === 'object') {
         logger(error);
     }
+}
+function toRelativePath(filePath) {
+    const relative = path.relative(process.cwd(), filePath);
+    if (!relative || relative.startsWith('..')) {
+        return filePath;
+    }
+    return relative;
+}
+function decodePointerToken(token) {
+    return token.replace(/~1/g, '/').replace(/~0/g, '~');
+}
+function formatInstancePath(instancePath) {
+    if (!instancePath) {
+        return 'корне документа';
+    }
+    const segments = instancePath
+        .split('/')
+        .filter(Boolean)
+        .map(decodePointerToken);
+    if (!segments.length) {
+        return 'корне документа';
+    }
+    let result = '';
+    segments.forEach((segment) => {
+        if (/^\d+$/.test(segment)) {
+            result += `[${segment}]`;
+            return;
+        }
+        if (result) {
+            result += '.';
+        }
+        result += segment;
+    });
+    return result || 'корне документа';
+}
+function formatAjvErrorMessage(error) {
+    const location = formatInstancePath(error.instancePath ?? '');
+    const isRoot = location === 'корне документа';
+    const place = isRoot ? 'в корне документа' : `в «${location}»`;
+    switch (error.keyword) {
+        case 'required': {
+            const missing = error.params && 'missingProperty' in error.params ? error.params.missingProperty : undefined;
+            if (missing) {
+                return `Отсутствует обязательное поле «${missing}» ${place}.`;
+            }
+            break;
+        }
+        case 'additionalProperties': {
+            const additional = error.params && 'additionalProperty' in error.params ? error.params.additionalProperty : undefined;
+            if (additional) {
+                return `Лишнее поле «${additional}» ${place}.`;
+            }
+            break;
+        }
+        case 'type': {
+            const expected = error.params && 'type' in error.params ? error.params.type : undefined;
+            if (expected) {
+                const subject = isRoot ? 'Корневой объект' : `Поле «${location}»`;
+                return `${subject} должно иметь тип ${expected}.`;
+            }
+            break;
+        }
+        case 'enum': {
+            const allowedValues = error.params && 'allowedValues' in error.params ? error.params.allowedValues : undefined;
+            if (Array.isArray(allowedValues)) {
+                const subject = isRoot ? 'Корневой объект' : `Поле «${location}»`;
+                const values = allowedValues.map((value) => JSON.stringify(value)).join(', ');
+                return `${subject} должно соответствовать одному из значений: ${values}.`;
+            }
+            break;
+        }
+        case 'minItems': {
+            const limit = error.params && 'limit' in error.params ? error.params.limit : undefined;
+            if (typeof limit === 'number') {
+                const subject = isRoot ? 'Коллекция в корне документа' : `Поле «${location}»`;
+                return `${subject} должно содержать не менее ${limit} элементов.`;
+            }
+            break;
+        }
+        case 'minLength': {
+            const limit = error.params && 'limit' in error.params ? error.params.limit : undefined;
+            if (typeof limit === 'number') {
+                const subject = isRoot ? 'Строка в корне документа' : `Поле «${location}»`;
+                return `${subject} должно содержать не менее ${limit} символов.`;
+            }
+            break;
+        }
+        case 'pattern': {
+            const pattern = error.params && 'pattern' in error.params ? error.params.pattern : undefined;
+            if (pattern) {
+                const subject = isRoot ? 'Значение в корне документа' : `Поле «${location}»`;
+                return `${subject} должно соответствовать шаблону ${pattern}.`;
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    const subject = isRoot ? 'Корневой объект' : `Поле «${location}»`;
+    const message = error.message ?? 'нарушает ограничения схемы';
+    return `${subject} ${message}.`;
+}
+function summarizeValidationErrors(filePath, errors, limit = VALIDATION_ERROR_LIMIT) {
+    const issues = Array.isArray(errors) ? errors : [];
+    const limited = issues.slice(0, limit).map(formatAjvErrorMessage);
+    const totalErrors = issues.length;
+    const truncated = Math.max(totalErrors - limited.length, 0);
+    const target = toRelativePath(filePath);
+    const summary = totalErrors
+        ? `Файл ${target} повреждён (обнаружено ${totalErrors} нарушений схемы).`
+        : `Файл ${target} не соответствует схеме.`;
+    return { summary, examples: limited, totalErrors, truncated };
+}
+export class JsonValidationError extends Error {
+    constructor({ store, action, filePath, summary, examples, totalErrors, truncated, logFilePath }) {
+        super(summary);
+        this.name = 'JsonValidationError';
+        this.store = store;
+        this.action = action;
+        this.filePath = filePath;
+        this.summary = summary;
+        this.examples = Array.isArray(examples) ? examples : [];
+        this.totalErrors = totalErrors;
+        this.truncated = truncated;
+        this.logFilePath = logFilePath;
+    }
+}
+async function reportValidationFailure({ store, action, filePath, errors }) {
+    const details = summarizeValidationErrors(filePath, errors, VALIDATION_ERROR_LIMIT);
+    const fullText = ajv.errorsText(errors ?? [], { separator: '\n' });
+    try {
+        await logValidationErrorDetails({
+            store,
+            action,
+            filePath,
+            summary: details.summary,
+            totalErrors: details.totalErrors,
+            examples: details.examples,
+            fullText,
+            errors: errors ?? []
+        });
+    }
+    catch (logErr) {
+        console.error(`[JsonStore] Не удалось записать подробности валидации: ${logError(logErr)}`);
+    }
+    throw new JsonValidationError({
+        store,
+        action,
+        filePath,
+        summary: details.summary,
+        examples: details.examples,
+        totalErrors: details.totalErrors,
+        truncated: details.truncated,
+        logFilePath: VALIDATION_LOG_RELATIVE
+    });
 }
 async function withPermissionHandling(action, target, task, options = {}) {
     const { warn = false } = options;
@@ -178,7 +342,12 @@ export class JsonStore {
       data = parsed;
     }
     if (!this.validator(data)) {
-      throw new Error(`Invalid data in ${this.filePath}: ${ajv.errorsText(this.validator.errors)}`);
+      await reportValidationFailure({
+        store: this.schemaKey,
+        action: 'read',
+        filePath: this.filePath,
+        errors: this.validator.errors ?? []
+      });
     }
     if (migrated) {
       await this.write(data);
@@ -193,7 +362,12 @@ export class JsonStore {
   async write(data) {
     await ensureEnvironment();
     if (!this.validator(data)) {
-      throw new Error(`Validation failed for ${this.schemaKey}: ${ajv.errorsText(this.validator.errors)}`);
+      await reportValidationFailure({
+        store: this.schemaKey,
+        action: 'write',
+        filePath: this.filePath,
+        errors: this.validator.errors ?? []
+      });
     }
     const payload = `${JSON.stringify(data, null, 2)}\n`;
     const tmpName = `${path.basename(this.filePath)}.${process.pid}.${Date.now()}.tmp`;
