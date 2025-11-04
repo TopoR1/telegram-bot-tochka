@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const fetchMock = vi.fn();
 
-vi.mock('undici', () => ({
+vi.mock('../../../src/utils/http-client.js', () => ({
   fetch: fetchMock
 }));
 
