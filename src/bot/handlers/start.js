@@ -248,8 +248,15 @@ export async function handleText(ctx) {
             });
         }
         ctx.courierProfile = courier;
-        ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: false };
-        await ctx.reply(`Спасибо, ${fullName}! ФИО записал. 🔍 Проверяю задания…`);
+        const status = resolveCourierStatus(courier);
+        ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: status.awaitingFullName };
+        const adminMode = await isAdmin(ctx.from.id);
+        const keyboard = createCourierStartKeyboard({
+            isRegistered: status.isRegistered,
+            isAdmin: adminMode,
+            awaitingFullName: status.awaitingFullName
+        });
+        await ctx.reply(`Спасибо, ${fullName}! ФИО записал. 🔍 Проверяю задания…`, keyboard);
         persistSession(ctx);
         await writeAuditLog({
             name: 'courier.onboarding_complete',
