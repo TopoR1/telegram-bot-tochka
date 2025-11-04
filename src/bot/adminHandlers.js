@@ -2,6 +2,7 @@ import { Markup } from 'telegraf';
 import { attachSession, persistSession } from './session.js';
 import { getOrCreateAdmin } from '../services/adminService.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
+import { replyWithLimitedText } from '../utils/telegram.js';
 import { listGroupBindings, saveGroupBinding, recordAnnouncement } from '../services/group-announcements.js';
 import { handleAdminUpload } from './handlers/adminUpload.js';
 import { JsonValidationError } from '../storage/jsonStore.js';
@@ -161,10 +162,10 @@ export async function handleDocument(ctx) {
             if (err.logFilePath) {
                 lines.push('', `Полный отчёт: ${err.logFilePath}`);
             }
-            await ctx.reply(lines.join('\n'));
+            await replyWithLimitedText(ctx, lines.join('\n'));
             return;
         }
-        await ctx.reply(`Не удалось обработать файл: ${logError(err)}.`);
+        await replyWithLimitedText(ctx, `Не удалось обработать файл: ${logError(err)}.`);
     }
 }
 export async function handleBindGroup(ctx) {
