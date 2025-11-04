@@ -5,7 +5,7 @@
 ## Используемые возможности платформы
 
 - **ES Modules** — код поставляется в формате ESM (`"type": "module"`). Node.js 16.20.2 полностью поддерживает его без флагов.
-- **Глобальный `fetch` и Web Streams** — в Node.js 16.20.2 отсутствует встроенная реализация. Полифилл подключается через `src/polyfills/fetch.js`, который экспортирует `fetch`, `Request`, `Response`, `Headers` и классы `ReadableStream`/`WritableStream`/`TransformStream` из `node-fetch@3` и `node:stream/web`.
+- **Глобальный `fetch` и Web Streams** — в Node.js 16.20.2 отсутствует встроенная реализация. Полифилл подключается через `src/polyfills/fetch.js`, который экспортирует `fetch`, `Request`, `Response`, `Headers` и классы `ReadableStream`/`WritableStream`/`TransformStream` из `node-fetch@3` и `web-streams-polyfill`.
 - **API `URL` и `Buffer`** — используются нативные реализации Node.js и поддерживаются без ограничений.
 
 ## Переключение окружения

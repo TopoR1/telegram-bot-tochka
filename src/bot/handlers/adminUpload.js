@@ -1,5 +1,5 @@
 import { Markup } from 'telegraf';
-import { fetch } from '../../utils/http-client.js';
+import { downloadFileBuffer } from '../../services/file-downloader.js';
 import { parseXlsx } from '../../services/xlsxParser.js';
 import { attachCouriers } from '../../services/courierMatcher.js';
 import { broadcastCards } from '../../services/broadcast.js';
@@ -9,15 +9,6 @@ import { updateAdmin } from '../../services/adminService.js';
 import { writeAuditLog, logError } from '../../utils/logger.js';
 import { listGroupBindings, recordAnnouncement } from '../../services/group-announcements.js';
 import { UPLOAD_ANNOUNCEMENT_MESSAGE } from '../messages/adminAnnouncements.js';
-async function loadFileBuffer(telegram, fileId) {
-    const link = await telegram.getFileLink(fileId);
-    const response = await fetch(link.href);
-    if (!response.ok) {
-        throw new Error('Не удалось загрузить файл из Telegram.');
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-}
 async function publishUploadAnnouncement(ctx, adminId) {
     const bindings = ctx.adminProfile?.groupBindings ?? (await listGroupBindings(adminId));
     if (ctx.adminProfile) {
@@ -75,7 +66,8 @@ async function publishUploadAnnouncement(ctx, adminId) {
     }
 }
 export async function handleAdminUpload(ctx, adminId, options) {
-    const buffer = await loadFileBuffer(ctx.telegram, options.fileId);
+    const link = await ctx.telegram.getFileLink(options.fileId);
+    const buffer = await downloadFileBuffer(link.href);
     const parsed = await parseXlsx(buffer, adminId);
     await saveAdminTableMetadata(adminId, {
         uploadedAt: parsed.uploadedAt,

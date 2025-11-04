@@ -1,32 +1,24 @@
 import fetch, { Headers, Request, Response } from 'node-fetch';
-import { ReadableStream, WritableStream, TransformStream } from 'node:stream/web';
+import {
+    ReadableStream,
+    WritableStream,
+    TransformStream
+} from 'web-streams-polyfill/ponyfill/es2018';
 
-if (!globalThis.fetch) {
-    globalThis.fetch = fetch;
-}
+const bindings = {
+    fetch,
+    Headers,
+    Request,
+    Response,
+    ReadableStream,
+    WritableStream,
+    TransformStream
+};
 
-if (!globalThis.Headers) {
-    globalThis.Headers = Headers;
-}
-
-if (!globalThis.Request) {
-    globalThis.Request = Request;
-}
-
-if (!globalThis.Response) {
-    globalThis.Response = Response;
-}
-
-if (!globalThis.ReadableStream) {
-    globalThis.ReadableStream = ReadableStream;
-}
-
-if (!globalThis.WritableStream) {
-    globalThis.WritableStream = WritableStream;
-}
-
-if (!globalThis.TransformStream) {
-    globalThis.TransformStream = TransformStream;
+for (const [name, value] of Object.entries(bindings)) {
+    if (value && !globalThis[name]) {
+        globalThis[name] = value;
+    }
 }
 
 export { fetch };
