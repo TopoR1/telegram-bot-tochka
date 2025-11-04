@@ -12,6 +12,33 @@ function normalizePartialProfile(profile) {
   return profile;
 }
 
+function sanitizeProfile(profile) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(profile)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (key === 'awaitingFullName') {
+      sanitized.awaitingFullName = Boolean(value);
+      continue;
+    }
+    if (key === 'adminIds') {
+      if (Array.isArray(value)) {
+        sanitized.adminIds = value.map((id) => id);
+      }
+      continue;
+    }
+    if (key === 'announcementTargets') {
+      if (Array.isArray(value)) {
+        sanitized.announcementTargets = value.map((target) => ({ ...target }));
+      }
+      continue;
+    }
+    sanitized[key] = value;
+  }
+  return sanitized;
+}
+
 /**
  * @param {number} telegramId
  * @param {object} profile
@@ -22,13 +49,22 @@ export async function getOrCreateCourier(telegramId, profile) {
     throw new TypeError('telegramId must be an integer');
   }
   const safeProfile = normalizePartialProfile(profile);
+  const sanitizedProfile = sanitizeProfile(safeProfile);
   const now = dayjs().toISOString();
   return courierStore.update((collection) => {
     const existing = collection[telegramId.toString()];
     if (existing) {
+      const adminIds = sanitizedProfile.adminIds
+        ? [...sanitizedProfile.adminIds]
+        : existing.adminIds;
+      const announcementTargets = sanitizedProfile.announcementTargets
+        ? sanitizedProfile.announcementTargets.map((target) => ({ ...target }))
+        : existing.announcementTargets;
       const updated = {
         ...existing,
-        ...safeProfile,
+        ...sanitizedProfile,
+        adminIds,
+        announcementTargets,
         updatedAt: now
       };
       collection[telegramId.toString()] = updated;
@@ -36,18 +72,20 @@ export async function getOrCreateCourier(telegramId, profile) {
     }
     const created = {
         telegramId,
-        username: safeProfile.username,
-        firstName: safeProfile.firstName,
-        lastName: safeProfile.lastName,
-        fullName: safeProfile.fullName,
-        phone: safeProfile.phone,
+        username: sanitizedProfile.username,
+        firstName: sanitizedProfile.firstName,
+        lastName: sanitizedProfile.lastName,
+        fullName: sanitizedProfile.fullName,
+        phone: sanitizedProfile.phone,
         createdAt: now,
         updatedAt: now,
-        adminIds: Array.isArray(safeProfile.adminIds) ? safeProfile.adminIds : [],
+        adminIds: Array.isArray(sanitizedProfile.adminIds)
+          ? [...sanitizedProfile.adminIds]
+          : [],
         lastCards: {},
-        awaitingFullName: Boolean(safeProfile.awaitingFullName),
-        announcementTargets: Array.isArray(safeProfile.announcementTargets)
-          ? safeProfile.announcementTargets
+        awaitingFullName: sanitizedProfile.awaitingFullName ?? false,
+        announcementTargets: Array.isArray(sanitizedProfile.announcementTargets)
+          ? sanitizedProfile.announcementTargets.map((target) => ({ ...target }))
           : []
     };
     collection[telegramId.toString()] = created;

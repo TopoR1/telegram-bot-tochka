@@ -140,14 +140,13 @@ export async function handleStart(ctx) {
     const profile = collectProfile(ctx);
     const [courier, adminMode] = await Promise.all([
         getOrCreateCourier(ctx.from.id, {
-            ...profile,
-            awaitingFullName: false
+            ...profile
         }),
         isAdmin(ctx.from.id)
     ]);
     ctx.courierProfile = courier;
     const status = resolveCourierStatus(courier);
-    ctx.sessionState = { awaitingFullName: status.awaitingFullName };
+    ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: status.awaitingFullName };
     await upsertUser({ telegramId: ctx.from.id, ...profile });
     const keyboard = createCourierStartKeyboard({
         isRegistered: status.isRegistered,
@@ -225,16 +224,40 @@ export async function handleText(ctx) {
     }
     if (ctx.sessionState?.awaitingFullName) {
         const fullName = normalizeFullName(raw);
-        const courier = await updateCourier(ctx.from.id, (existing) => ({
-            ...existing,
-            fullName,
-            awaitingFullName: false
-        }));
+        if (!fullName) {
+            await ctx.reply('Не удалось распознать ФИО. Напишите полностью, например: Иванов Иван Иванович.');
+            return;
+        }
+        let courier = ctx.courierProfile;
+        if (!courier) {
+            courier = await getCourier(ctx.from.id);
+        }
+        if (courier) {
+            courier = await updateCourier(ctx.from.id, (existing) => ({
+                ...existing,
+                fullName,
+                awaitingFullName: false
+            }));
+        }
+        else {
+            const profile = collectProfile(ctx);
+            courier = await getOrCreateCourier(ctx.from.id, {
+                ...profile,
+                fullName,
+                awaitingFullName: false
+            });
+        }
         ctx.courierProfile = courier;
-        ctx.sessionState = { awaitingFullName: false };
-        await ctx.reply(`Спасибо, ${fullName}! Номер сохранён. 🔍 Ищу ваше последнее задание…`);
+        ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: false };
+        await ctx.reply(`Спасибо, ${fullName}! ФИО записал. 🔍 Проверяю задания…`);
         persistSession(ctx);
-        await deliverLatestTasks(ctx, { notifyWhenEmpty: true, limit: 5, reason: 'auto' });
+        await writeAuditLog({
+            name: 'courier.onboarding_complete',
+            userId: ctx.from.id,
+            phone: courier?.phone,
+            details: { fullName }
+        });
+        await deliverLatestTasks(ctx, { notifyWhenEmpty: true, limit: 5, reason: 'onboarding' });
         return;
     }
     const digitsCount = raw.replace(/\D/g, '').length;
