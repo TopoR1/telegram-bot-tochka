@@ -1,4 +1,5 @@
 import { Markup } from 'telegraf';
+import { fetch } from 'undici';
 import { parseXlsx } from '../../services/xlsxParser.js';
 import { attachCouriers } from '../../services/courierMatcher.js';
 import { broadcastCards } from '../../services/broadcast.js';
