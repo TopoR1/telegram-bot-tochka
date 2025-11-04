@@ -81,3 +81,17 @@ export async function updateAdmin(telegramId, updater) {
   const bindings = await getGroupBindings(telegramId);
   return { ...updated, groupBindings: bindings };
 }
+
+/**
+ * Проверяет, зарегистрирован ли пользователь как администратор.
+ *
+ * @param {number} telegramId
+ * @returns {Promise<boolean>}
+ */
+export async function isAdmin(telegramId) {
+  if (!Number.isInteger(telegramId)) {
+    throw new TypeError('telegramId must be an integer');
+  }
+  const collection = await adminStore.read();
+  return Boolean(collection[telegramId.toString()]);
+}
