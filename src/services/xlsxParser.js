@@ -50,31 +50,56 @@ function looksLikeLink(value) {
         return true;
     return /(vk\.com|t\.me|telegram\.me|ok\.ru|instagram\.com|facebook\.com|^www\.|\.[a-z]{2,}$)/i.test(trimmed);
 }
-function looksLikeTochkaLink(value) {
-    const trimmed = value.trim();
-    if (!trimmed)
-        return false;
-    if (!/tochka\.com/i.test(trimmed))
-        return false;
-    return looksLikeLink(trimmed);
-}
 function normalizeMoney(raw) {
     if (raw === undefined || raw === null)
         return undefined;
     const value = String(raw).replace(/[\s\u00A0]/g, '').trim();
     if (!value)
         return undefined;
-    const digits = value.replace(/[^0-9,.-]/g, '').replace(/,/g, '.');
+    let digits = value.replace(/[^0-9,.,-]/g, '');
     if (!digits)
         return undefined;
-    const dotCount = (digits.match(/\./g) ?? []).length;
-    let normalized = digits;
-    if (dotCount > 1) {
+    const sign = digits.startsWith('-') ? -1 : 1;
+    if (sign === -1)
+        digits = digits.slice(1);
+    if (!digits)
+        return undefined;
+    const hasDot = digits.includes('.');
+    const hasComma = digits.includes(',');
+    if (hasDot && hasComma) {
         const lastDot = digits.lastIndexOf('.');
-        const integer = digits.slice(0, lastDot).replace(/\./g, '');
-        const fractional = digits.slice(lastDot + 1);
-        normalized = fractional ? `${integer}.${fractional}` : integer;
+        const lastComma = digits.lastIndexOf(',');
+        const decimalSeparator = lastDot > lastComma ? '.' : ',';
+        const thousandsSeparator = decimalSeparator === '.' ? ',' : '.';
+        digits = digits.split(thousandsSeparator).join('');
+        if (decimalSeparator === ',') {
+            digits = digits.replace(/,/g, '.');
+        }
     }
+    else if (hasDot) {
+        const parts = digits.split('.');
+        if (parts.length > 2) {
+            const fractional = parts.pop();
+            digits = `${parts.join('')}.${fractional}`;
+        }
+        else if (parts.length === 2 && parts[1].length === 3 && !hasComma) {
+            digits = parts.join('');
+        }
+    }
+    else if (hasComma) {
+        const parts = digits.split(',');
+        if (parts.length > 2) {
+            const fractional = parts.pop();
+            digits = `${parts.join('')}.${fractional}`;
+        }
+        else if (parts.length === 2 && parts[1].length === 3) {
+            digits = parts.join('');
+        }
+        else {
+            digits = digits.replace(/,/g, '.');
+        }
+    }
+    const normalized = sign === -1 ? `-${digits}` : digits;
     const parsed = Number(normalized);
     if (Number.isNaN(parsed))
         return undefined;
@@ -94,17 +119,15 @@ function normalizeLink(raw) {
         return `https://t.me/${value.slice(1)}`;
     }
     if (/^https?:\/\//i.test(value)) {
-        return /tochka\.com/i.test(value) ? value : undefined;
+        return value;
     }
     if (/^\/\//.test(value)) {
-        const normalized = `https:${value}`;
-        return /tochka\.com/i.test(normalized) ? normalized : undefined;
+        return `https:${value}`;
     }
     if (/[a-z0-9.-]+\.[a-z]{2,}/i.test(value)) {
-        const normalized = `https://${value}`;
-        return /tochka\.com/i.test(normalized) ? normalized : undefined;
+        return `https://${value}`;
     }
-    return /tochka\.com/i.test(value) ? value : undefined;
+    return undefined;
 }
 function detectColumns(headerRow, dataRows) {
     const mapping = {};
@@ -167,7 +190,7 @@ function detectColumns(headerRow, dataRows) {
         }
     }
     if (mapping.link === undefined) {
-        const byLink = findColumn((values) => values.some(looksLikeTochkaLink));
+        const byLink = findColumn((values) => values.some(looksLikeLink));
         if (byLink !== undefined) {
             mapping.link = byLink;
         }
@@ -279,3 +302,9 @@ export async function parseXlsx(buffer, adminId) {
         rows: rowsData
     };
 }
+
+export const __private__ = {
+    normalizeMoney,
+    normalizeLink,
+    looksLikeLink
+};
