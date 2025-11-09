@@ -104,13 +104,33 @@ export async function collectDeliveryReport(adminId, uploadedAt) {
 }
 /**
  * @param {DeliveryIssue[]} issues
+ * @param {(issue: DeliveryIssue) => boolean} predicate
  * @returns {string[]}
  */
-function collectAffectedCourierNames(issues) {
+function collectCourierNames(issues, predicate) {
     const names = issues
+        .filter((issue) => predicate(issue))
         .map((issue) => issue.courierFullName?.trim())
         .filter((name) => Boolean(name));
     return [...new Set(names)];
+}
+
+function isCourierNotFound(issue) {
+    return issue.status === 'skipped';
+}
+
+function isCourierBlocked(issue) {
+    if (issue.status !== 'error' || !issue.reason) {
+        return false;
+    }
+    const normalizedReason = issue.reason.toLowerCase();
+    const blockedMarkers = [
+        'bot was blocked by the user',
+        'user is deactivated',
+        'user is deleted',
+        'chat not found'
+    ];
+    return blockedMarkers.some((marker) => normalizedReason.includes(marker));
 }
 /**
  * @param {DeliverySummary} summary
@@ -128,10 +148,17 @@ export function formatDeliveryReport(summary) {
         `Ошибок: ${summary.errors}`
     ];
     if (summary.issues.length) {
-        const affected = collectAffectedCourierNames(summary.issues);
-        if (affected.length) {
-            lines.push('', 'Не получили задания:');
-            affected.forEach((name, index) => {
+        const notFound = collectCourierNames(summary.issues, isCourierNotFound);
+        if (notFound.length) {
+            lines.push('', 'Курьеров нет в базе бота:');
+            notFound.forEach((name, index) => {
+                lines.push(`${index + 1}. ${name}`);
+            });
+        }
+        const blocked = collectCourierNames(summary.issues, isCourierBlocked);
+        if (blocked.length) {
+            lines.push('', 'Курьеры ограничили бота:');
+            blocked.forEach((name, index) => {
                 lines.push(`${index + 1}. ${name}`);
             });
         }
