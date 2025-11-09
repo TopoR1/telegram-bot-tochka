@@ -19,7 +19,19 @@ function looksLikePhone(value) {
     return digits.length >= 10;
 }
 function looksLikeFullName(value) {
-    return /\p{L}+\s+\p{L}+/u.test(value);
+    if (!value)
+        return false;
+    const trimmed = value.trim();
+    if (!trimmed)
+        return false;
+    if (/[0-9]/.test(trimmed))
+        return false;
+    if (/[.,;:!?@#№"'(){}\[\]<>]/.test(trimmed))
+        return false;
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length < 2 || parts.length > 4)
+        return false;
+    return parts.every((part) => /^\p{L}+(?:-\p{L}+)*$/u.test(part));
 }
 function looksLikeMoney(value) {
     const cleaned = value.replace(/[\s\u00A0]/g, '');
