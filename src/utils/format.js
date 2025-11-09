@@ -17,7 +17,7 @@ function formatCurrency(value) {
     });
     return formatter.format(value);
 }
-function formatProfileLink(link) {
+function formatTaskLink(link) {
     const url = escapeHtmlAttribute(link);
     const display = escapeHtml(link.replace(/^https?:\/\//i, ''));
     return `🔗 <a href="${url}">${display}</a>`;
@@ -32,23 +32,10 @@ export function formatCard(card) {
         lines.push(`📞 Телефон: ${escapeHtml(card.courierPhone)}`);
     }
     if (typeof card.earningsLastWeek === 'number') {
-        lines.push(`💰 Заработок за прошлую неделю: ${formatCurrency(card.earningsLastWeek)} ₽`);
+        lines.push(`💰 Сумма выплаты: ${formatCurrency(card.earningsLastWeek)} ₽`);
     }
     if (card.profileLink) {
-        lines.push(formatProfileLink(card.profileLink));
-    }
-    lines.push(`📦 Заказ #${escapeHtml(card.orderId ?? '—')}`);
-    if (card.address) {
-        lines.push(`📍 Адрес: ${escapeHtml(card.address)}`);
-    }
-    if (card.window) {
-        lines.push(`⏰ Окно доставки: ${escapeHtml(card.window)}`);
-    }
-    if (card.paymentType) {
-        lines.push(`💳 Оплата: ${escapeHtml(card.paymentType)}`);
-    }
-    if (card.comment) {
-        lines.push(`📝 Комментарий: ${escapeHtml(card.comment)}`);
+        lines.push(formatTaskLink(card.profileLink));
     }
     lines.push(`📥 Загружено: ${dayjs(card.uploadedAt).format('DD.MM.YYYY HH:mm')}`);
     return lines.join('\n');
