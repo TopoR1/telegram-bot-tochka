@@ -4,9 +4,9 @@ import { v4 as uuid } from 'uuid';
 import { normalizeFullName } from '../utils/name.js';
 import { normalizePhone } from '../utils/phone.js';
 const SYNONYMS = {
-    phone: ['телефон', 'phone', 'номер', 'mobile'],
-    fullName: ['фио', 'имя', 'courier', 'курьер'],
-    earnings: ['заработок', 'выручка', 'доход', 'зарплата', 'income', 'прошлая неделя'],
+    phone: ['телефон', 'phone', 'номер', 'mobile', /^contact$/],
+    fullName: ['фио', 'имя', 'courier', 'курьер', 'contact_name', 'contact name'],
+    earnings: ['заработок', 'выручка', 'доход', 'зарплата', 'income', 'прошлая неделя', 'price', 'payout'],
     link: ['ссылка', 'profile', 'профиль', 'link', 'url'],
     order: ['заказ', 'order', '№', 'номер заказа'],
     address: ['адрес', 'address', 'куда', 'location'],
@@ -50,6 +50,14 @@ function looksLikeLink(value) {
         return true;
     return /(vk\.com|t\.me|telegram\.me|ok\.ru|instagram\.com|facebook\.com|^www\.|\.[a-z]{2,}$)/i.test(trimmed);
 }
+function looksLikeTochkaLink(value) {
+    const trimmed = value.trim();
+    if (!trimmed)
+        return false;
+    if (!/tochka\.com/i.test(trimmed))
+        return false;
+    return looksLikeLink(trimmed);
+}
 function normalizeMoney(raw) {
     if (raw === undefined || raw === null)
         return undefined;
@@ -86,20 +94,28 @@ function normalizeLink(raw) {
         return `https://t.me/${value.slice(1)}`;
     }
     if (/^https?:\/\//i.test(value)) {
-        return value;
+        return /tochka\.com/i.test(value) ? value : undefined;
     }
     if (/^\/\//.test(value)) {
-        return `https:${value}`;
+        const normalized = `https:${value}`;
+        return /tochka\.com/i.test(normalized) ? normalized : undefined;
     }
     if (/[a-z0-9.-]+\.[a-z]{2,}/i.test(value)) {
-        return `https://${value}`;
+        const normalized = `https://${value}`;
+        return /tochka\.com/i.test(normalized) ? normalized : undefined;
     }
-    return value;
+    return /tochka\.com/i.test(value) ? value : undefined;
 }
 function detectColumns(headerRow, dataRows) {
     const mapping = {};
     const used = new Set();
     const normalizedHeaders = headerRow.map((header) => header?.toLowerCase?.().trim?.() ?? '');
+    const matchesSynonym = (header, synonym) => {
+        if (synonym instanceof RegExp) {
+            return synonym.test(header);
+        }
+        return header.includes(synonym);
+    };
     Object.keys(SYNONYMS).forEach((key) => {
         const synonyms = SYNONYMS[key];
         if (!synonyms?.length)
@@ -107,7 +123,7 @@ function detectColumns(headerRow, dataRows) {
         const index = normalizedHeaders.findIndex((header, idx) => {
             if (used.has(idx))
                 return false;
-            return synonyms.some((synonym) => header.includes(synonym));
+            return synonyms.some((synonym) => matchesSynonym(header, synonym));
         });
         if (index >= 0) {
             mapping[key] = index;
@@ -151,7 +167,7 @@ function detectColumns(headerRow, dataRows) {
         }
     }
     if (mapping.link === undefined) {
-        const byLink = findColumn((values) => values.some(looksLikeLink));
+        const byLink = findColumn((values) => values.some(looksLikeTochkaLink));
         if (byLink !== undefined) {
             mapping.link = byLink;
         }
