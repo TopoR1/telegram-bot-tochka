@@ -1,11 +1,21 @@
 import { Markup } from 'telegraf';
 import { attachSession, persistSession } from './session.js';
-import { getOrCreateAdmin } from '../services/adminService.js';
+import { getOrCreateAdmin, isAdmin } from '../services/adminService.js';
 import { writeAuditLog, logError } from '../utils/logger.js';
 import { replyWithLimitedText } from '../utils/telegram.js';
 import { listGroupBindings, saveGroupBinding, recordAnnouncement } from '../services/group-announcements.js';
 import { handleAdminUpload } from './handlers/adminUpload.js';
 import { JsonValidationError } from '../storage/jsonStore.js';
+import { getCourier } from '../services/courierService.js';
+import { createCourierStartKeyboard } from './keyboards/courier.js';
+import { UnknownInputError, UNKNOWN_INPUT_MESSAGE } from './errors.js';
+
+function resolveCourierStatus(courier) {
+    const hasPhone = Boolean(courier?.phone);
+    const awaitingFullName = Boolean((courier?.awaitingFullName ?? (!courier?.fullName && hasPhone)));
+    const isRegistered = hasPhone && !awaitingFullName;
+    return { hasPhone, awaitingFullName, isRegistered };
+}
 export async function handleGetAdmin(ctx) {
     attachSession(ctx);
     if (!ctx.from)
@@ -16,7 +26,7 @@ export async function handleGetAdmin(ctx) {
         lastName: ctx.from.last_name
     });
     ctx.adminProfile = admin;
-    await ctx.reply('Вы зарегистрированы как администратор. Отправьте .xlsx файл с карточками.');
+    await ctx.reply('Вы зарегистрированы как администратор. Отправьте .xlsx файл с карточками.', Markup.removeKeyboard());
     persistSession(ctx);
 }
 async function clearTopicSelectionKeyboard(ctx) {
@@ -130,6 +140,22 @@ export async function handleDocument(ctx) {
     if (!ctx.from || !ctx.message || !('document' in ctx.message))
         return;
     try {
+        const adminMode = await isAdmin(ctx.from.id);
+        if (!adminMode) {
+            const courier = await getCourier(ctx.from.id);
+            if (courier) {
+                ctx.courierProfile = courier;
+            }
+            const status = resolveCourierStatus(courier);
+            ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: status.awaitingFullName };
+            const keyboard = createCourierStartKeyboard({
+                isRegistered: status.isRegistered,
+                isAdmin: false,
+                awaitingFullName: status.awaitingFullName
+            });
+            persistSession(ctx);
+            throw new UnknownInputError(UNKNOWN_INPUT_MESSAGE, keyboard);
+        }
         const admin = await getOrCreateAdmin(ctx.from.id, {
             username: ctx.from.username,
             firstName: ctx.from.first_name,
