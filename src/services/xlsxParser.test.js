@@ -1,5 +1,6 @@
+import XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
-import { __private__ } from './xlsxParser.js';
+import { __private__, parseXlsx } from './xlsxParser.js';
 
 describe('normalizeMoney', () => {
     const { normalizeMoney } = __private__;
@@ -41,5 +42,24 @@ describe('normalizeLink', () => {
     });
     it('returns undefined for invalid links', () => {
         expect(normalizeLink('not a link')).toBeUndefined();
+    });
+});
+
+describe('parseXlsx', () => {
+    it('detects link column without header', async () => {
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.aoa_to_sheet([
+            ['Имя', 'Телефон'],
+            ['Иван Иванов', '+7 999 111-22-33', 'https://t.me/ivan'],
+            ['Петр Петров', '+7 999 555-66-77', '@petr']
+        ]);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        const { cards } = await parseXlsx(buffer, 'admin-1');
+
+        expect(cards).toHaveLength(2);
+        expect(cards[0].profileLink).toBe('https://t.me/ivan');
+        expect(cards[1].profileLink).toBe('https://t.me/petr');
     });
 });

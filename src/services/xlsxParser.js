@@ -132,7 +132,9 @@ function normalizeLink(raw) {
 function detectColumns(headerRow, dataRows) {
     const mapping = {};
     const used = new Set();
-    const normalizedHeaders = headerRow.map((header) => header?.toLowerCase?.().trim?.() ?? '');
+    const dataRowMaxLength = dataRows.reduce((max, row) => Math.max(max, row.length), 0);
+    const columnCount = Math.max(headerRow.length, dataRowMaxLength);
+    const normalizedHeaders = Array.from({ length: columnCount }, (_, idx) => headerRow[idx]?.toLowerCase?.().trim?.() ?? '');
     const matchesSynonym = (header, synonym) => {
         if (synonym instanceof RegExp) {
             return synonym.test(header);
@@ -153,7 +155,6 @@ function detectColumns(headerRow, dataRows) {
             used.add(index);
         }
     });
-    const columnCount = headerRow.length;
     const getValues = (col) => dataRows
         .map((row) => (row[col] !== undefined && row[col] !== null ? String(row[col]) : ''))
         .filter((value) => value.trim() !== '');
