@@ -68,7 +68,15 @@ function collectSortedRows(collection) {
 function findMatchingRow(tables, phone, normalizedNames = []) {
     const sortedRows = collectSortedRows(tables);
     if (phone) {
-        const byPhone = sortedRows.find((entry) => entry.row.phone && entry.row.phone === phone);
+        const byPhone = sortedRows.find((entry) => {
+            if (!entry.row.phone || entry.row.phone !== phone) {
+                return false;
+            }
+            if (!entry.row.normalizedFullName) {
+                return true;
+            }
+            return normalizedNames.includes(entry.row.normalizedFullName);
+        });
         if (byPhone) {
             return byPhone;
         }
@@ -155,3 +163,5 @@ export async function searchLatestTasks({ telegramId, limit = 5 }) {
         normalizedPhone: normalizedPhone ?? searchPhone
     };
 }
+
+export const __private__ = { findMatchingRow };
