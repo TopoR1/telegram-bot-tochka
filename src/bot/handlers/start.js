@@ -7,9 +7,8 @@ import { writeAuditLog } from '../../utils/logger.js';
 import { upsertUser, markTaskRequest } from '../../storage/usersStore.js';
 import { searchLatestTasks } from '../../services/task-search.js';
 import { buildTaskCard } from '../messages/taskCard.js';
-import { createCourierStartKeyboard, REGISTRATION_HINT_LABEL, FULL_NAME_HINT_LABEL, ADMIN_MODE_HINT_LABEL } from '../keyboards/courier.js';
-
-const UNKNOWN_INPUT_REPLY = 'Я пока не знаю, что на это ответить. Попробуйте использовать команды или кнопку «Получить последнее задание».';
+import { createCourierStartKeyboard, REGISTRATION_HINT_LABEL, FULL_NAME_HINT_LABEL, ADMIN_MODE_HINT_LABEL, BACK_TO_PHONE_LABEL } from '../keyboards/courier.js';
+import { UnknownInputError, UNKNOWN_INPUT_MESSAGE } from '../errors.js';
 function collectProfile(ctx) {
     if (!ctx.from)
         return {};
@@ -44,7 +43,7 @@ async function ensureCourierContext(ctx) {
     return { courier, status };
 }
 
-async function replyUnknownInput(ctx, context = {}) {
+async function throwUnknownInput(ctx, context = {}) {
     if (!ctx.from) {
         return;
     }
@@ -55,7 +54,7 @@ async function replyUnknownInput(ctx, context = {}) {
         isAdmin: adminMode,
         awaitingFullName: status.awaitingFullName
     });
-    await ctx.reply(UNKNOWN_INPUT_REPLY, keyboard);
+    throw new UnknownInputError(UNKNOWN_INPUT_MESSAGE, keyboard);
 }
 
 async function guardTaskAccess(ctx) {
@@ -70,16 +69,21 @@ async function guardTaskAccess(ctx) {
     }
     const status = resolveCourierStatus(courier);
     ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: status.awaitingFullName };
+    const keyboard = createCourierStartKeyboard({
+        isRegistered: status.isRegistered,
+        isAdmin: adminMode,
+        awaitingFullName: status.awaitingFullName
+    });
     if (adminMode) {
-        await ctx.reply('Похоже, вы используете режим администратора. Курьерские задания в нём недоступны. Используйте /get_admin для выгрузок или выйдите из админ-режима.');
+        await ctx.reply('Похоже, вы используете режим администратора. Курьерские задания в нём недоступны. Используйте /get_admin для выгрузок или выйдите из админ-режима.', keyboard);
         return { allowed: false, status, adminMode };
     }
     if (!status.hasPhone) {
-        await ctx.reply('Мне нужен ваш номер телефона, чтобы подобрать задания. Нажмите /start и поделитесь контактом.');
+        await ctx.reply('Мне нужен ваш номер телефона, чтобы подобрать задания. Нажмите /start и поделитесь контактом.', keyboard);
         return { allowed: false, status, adminMode };
     }
     if (status.awaitingFullName) {
-        await ctx.reply('Почти готово! Напишите ваше ФИО одной строкой, чтобы я смог подключить вас к заданиям.');
+        await ctx.reply('Почти готово! Напишите ваше ФИО одной строкой, чтобы я смог подключить вас к заданиям.', keyboard);
         return { allowed: false, status, adminMode };
     }
     return { allowed: true, status, adminMode, courier };
@@ -130,9 +134,8 @@ async function handlePhoneSubmission(ctx, rawPhone, options) {
     const { courier: existingCourier, status: existingStatus } = await ensureCourierContext(ctx);
     if (existingStatus.isRegistered) {
         const adminMode = await adminModePromise;
-        await replyUnknownInput(ctx, { status: existingStatus, adminMode });
         persistSession(ctx);
-        return;
+        await throwUnknownInput(ctx, { status: existingStatus, adminMode });
     }
     const adminMode = await adminModePromise;
     const profile = collectProfile(ctx);
@@ -244,9 +247,8 @@ export async function handleContact(ctx) {
     }
     const { status } = await ensureCourierContext(ctx);
     if (status.isRegistered) {
-        await replyUnknownInput(ctx, { status });
         persistSession(ctx);
-        return;
+        await throwUnknownInput(ctx, { status });
     }
     await handlePhoneSubmission(ctx, contact.phone_number, { validated: true });
 }
@@ -268,6 +270,52 @@ export async function handleText(ctx) {
     }
     if (raw === ADMIN_MODE_HINT_LABEL) {
         await ctx.reply('В режиме администратора я не отправляю курьерские задания. Используйте /get_admin для работы с выгрузками.');
+        return;
+    }
+    if (raw === BACK_TO_PHONE_LABEL) {
+        if (!ctx.sessionState?.awaitingFullName) {
+            persistSession(ctx);
+            await throwUnknownInput(ctx, { status });
+        }
+        let courier = ctx.courierProfile;
+        if (!courier) {
+            courier = await getCourier(ctx.from.id);
+        }
+        if (courier) {
+            courier = await updateCourier(ctx.from.id, (existing) => ({
+                ...existing,
+                phone: null,
+                awaitingFullName: false
+            }));
+        }
+        else {
+            const profile = collectProfile(ctx);
+            courier = await getOrCreateCourier(ctx.from.id, {
+                ...profile,
+                phone: null,
+                awaitingFullName: false
+            });
+        }
+        ctx.courierProfile = courier;
+        const profile = collectProfile(ctx);
+        await upsertUser({
+            telegramId: ctx.from.id,
+            ...profile,
+            phone: null,
+            normalizedPhone: null,
+            phoneValidated: false
+        });
+        const updatedStatus = resolveCourierStatus(courier);
+        ctx.sessionState = { ...(ctx.sessionState ?? {}), awaitingFullName: updatedStatus.awaitingFullName };
+        const adminMode = await isAdmin(ctx.from.id);
+        const keyboard = createCourierStartKeyboard({
+            isRegistered: updatedStatus.isRegistered,
+            isAdmin: adminMode,
+            awaitingFullName: updatedStatus.awaitingFullName
+        });
+        await ctx.reply('Хорошо, давайте обновим номер телефона. Поделитесь новым номером через кнопку ниже.', keyboard);
+        await writeAuditLog({ name: 'courier.registration_restart', userId: ctx.from.id });
+        persistSession(ctx);
         return;
     }
     if (ctx.sessionState?.awaitingFullName) {
@@ -318,16 +366,15 @@ export async function handleText(ctx) {
     const digitsCount = raw.replace(/\D/g, '').length;
     if (digitsCount >= 10) {
         if (status.isRegistered) {
-            await replyUnknownInput(ctx, { status });
             persistSession(ctx);
-            return;
+            await throwUnknownInput(ctx, { status });
         }
         await handlePhoneSubmission(ctx, raw, { validated: false });
         return;
     }
     if (status.isRegistered) {
-        await replyUnknownInput(ctx, { status });
         persistSession(ctx);
+        await throwUnknownInput(ctx, { status });
     }
 }
 export async function handleCardsRequest(ctx) {

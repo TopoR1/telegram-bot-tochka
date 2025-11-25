@@ -4,6 +4,7 @@ export const LAST_TASK_BUTTON_LABEL = 'Получить последнее за�
 export const REGISTRATION_HINT_LABEL = 'ℹ️ Чтобы получить задания, отправьте номер телефона';
 export const FULL_NAME_HINT_LABEL = '✍️ Напишите ФИО, чтобы завершить регистрацию';
 export const ADMIN_MODE_HINT_LABEL = 'ℹ️ Курьерский режим недоступен администраторам';
+export const BACK_TO_PHONE_LABEL = 'Вернуться назад';
 /**
  * @param {Object} [options]
  * @param {boolean} [options.isRegistered]
@@ -13,23 +14,19 @@ export const ADMIN_MODE_HINT_LABEL = 'ℹ️ Курьерский режим н�
 export function createCourierStartKeyboard(options = {}) {
     const { isRegistered = false, isAdmin = false, awaitingFullName = false } = options;
     if (isAdmin) {
-        return Markup.keyboard([[ADMIN_MODE_HINT_LABEL]])
-            .oneTime()
-            .resize();
+        return Markup.removeKeyboard();
     }
     if (isRegistered) {
         return Markup.keyboard([[LAST_TASK_BUTTON_LABEL]])
             .persistent()
             .resize();
     }
-    const rows = [
-        [Markup.button.contactRequest(PHONE_BUTTON_LABEL)],
-        [REGISTRATION_HINT_LABEL]
-    ];
     if (awaitingFullName) {
-        rows.push([FULL_NAME_HINT_LABEL]);
+        return Markup.keyboard([[BACK_TO_PHONE_LABEL]])
+            .oneTime()
+            .resize();
     }
-    return Markup.keyboard(rows)
+    return Markup.keyboard([[Markup.button.contactRequest(PHONE_BUTTON_LABEL)]])
         .oneTime()
         .resize();
 }

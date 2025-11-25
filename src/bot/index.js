@@ -4,6 +4,7 @@ import { handleHelp } from './handlers/help.js';
 import { LAST_TASK_BUTTON_LABEL } from './keyboards/courier.js';
 import { handleGetAdmin, handleDocument, handleBindGroup, handleAnnounceCommand, handleAnnounceSelection, handleAnnounceText, handleBindGroupSelection } from './adminHandlers.js';
 import { handleChatMember, handleMyChatMember } from './handlers/chatMembers.js';
+import { UnknownInputError } from './errors.js';
 /**
  * @typedef {import('./types.js').BotContext} BotContext
  */
@@ -43,6 +44,10 @@ export function createBot(token) {
     });
     bot.catch(async (err, ctx) => {
         console.error('Bot error:', err);
+        if (err instanceof UnknownInputError) {
+            await ctx.reply?.(err.message, err.replyOptions);
+            return;
+        }
         await ctx.reply?.('Ой! Что-то пошло не так. Попробуйте еще раз позже.');
     });
     return bot;
