@@ -72,10 +72,13 @@ function findMatchingRow(tables, phone, normalizedNames = []) {
             if (!entry.row.phone || entry.row.phone !== phone) {
                 return false;
             }
-            if (!entry.row.normalizedFullName) {
-                return true;
+            if (normalizedNames.length) {
+                if (!entry.row.normalizedFullName) {
+                    return false;
+                }
+                return normalizedNames.includes(entry.row.normalizedFullName);
             }
-            return normalizedNames.includes(entry.row.normalizedFullName);
+            return true;
         });
         if (byPhone) {
             return byPhone;

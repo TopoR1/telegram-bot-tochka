@@ -50,7 +50,7 @@ describe('findMatchingRow', () => {
         expect(match?.row.earningsLastWeek).toBe(4200);
     });
 
-    it('matches phone when name in table is missing', () => {
+    it('matches phone when name in table is missing and courier name is unknown', () => {
         const tables = {
             1: {
                 uploadedAt: '2024-06-10T12:00:00Z',
@@ -64,9 +64,35 @@ describe('findMatchingRow', () => {
             }
         };
 
-        const match = findMatchingRow(tables, '+7 999 111-22-33', ['иван иванов']);
+        const match = findMatchingRow(tables, '+7 999 111-22-33', []);
 
         expect(match?.row.id).toBe('no-name-payout');
         expect(match?.row.earningsLastWeek).toBe(3100);
+    });
+
+    it('ignores phone matches without names when courier name is known', () => {
+        const tables = {
+            1: {
+                uploadedAt: '2024-06-10T12:00:00Z',
+                rows: [
+                    {
+                        id: 'missing-name',
+                        phone: '+7 999 111-22-33',
+                        earningsLastWeek: 3100
+                    },
+                    {
+                        id: 'with-name',
+                        phone: '+7 999 111-22-33',
+                        normalizedFullName: 'иван иванов',
+                        earningsLastWeek: 4200
+                    }
+                ]
+            }
+        };
+
+        const match = findMatchingRow(tables, '+7 999 111-22-33', ['иван иванов']);
+
+        expect(match?.row.id).toBe('with-name');
+        expect(match?.row.earningsLastWeek).toBe(4200);
     });
 });
