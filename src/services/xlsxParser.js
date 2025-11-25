@@ -26,7 +26,7 @@ function looksLikeFullName(value) {
         return false;
     if (/[0-9]/.test(trimmed))
         return false;
-    if (/[.,;:!?@#№"'(){}\[\]<>]/.test(trimmed))
+    if (/[.,;:!?@#№"'(){}[\]<>]/.test(trimmed))
         return false;
     const parts = trimmed.split(/\s+/).filter(Boolean);
     if (parts.length < 2 || parts.length > 4)
